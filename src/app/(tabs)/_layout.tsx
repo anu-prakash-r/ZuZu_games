@@ -24,7 +24,6 @@ export default function TabsLayout() {
         },
       }}
     >
-      {/* 1. HOME TAB */}
       <Tabs.Screen
         name="home"
         options={{
@@ -39,7 +38,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 2. TABLES TAB */}
       <Tabs.Screen
         name="tables"
         options={{
@@ -54,7 +52,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 3. ORDERS TAB */}
       <Tabs.Screen
         name="orders"
         options={{
@@ -69,7 +66,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 4. SETTINGS TAB */}
       <Tabs.Screen
         name="kot"
         options={{

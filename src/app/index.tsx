@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import LoginScreen from "../Screens/Auth/Login.Screen"; // Ensure path matches your project layout
+import LoginScreen from "../Screens/Auth/Login.Screen";
 
 export default function Index() {
   return (

@@ -342,15 +342,12 @@ export default function HomeScreen() {
           className="flex-1 justify-center items-center px-5"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          {/* Backdrop */}
           <Pressable
             className="absolute inset-0 bg-black/60"
             onPress={() => setCreateTableVisible(false)}
           />
 
-          {/* Modal Container */}
           <View className="w-full max-w-md bg-white rounded-[28px] overflow-hidden shadow-2xl border border-slate-100">
-            {/* Header */}
             <View className="bg-[#35116B] px-6 py-5">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-3.5">
@@ -377,15 +374,12 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Body Content */}
             <View className="p-6">
-              {/* Table Number Input */}
               <View className="mb-4">
                 <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-2">
                   Table Number
                 </Text>
                 <View className="flex-row items-center border border-slate-200/80 rounded-2xl px-4 h-14 bg-slate-50/50">
-                  {/* FIX 1: Replaced invalid "hashtag" icon with "pricetag-outline" */}
                   <Ionicons name="pricetag-outline" size={18} color="#35116B" />
                   <TextInput
                     className="flex-1 ml-3 text-slate-900 font-semibold text-base"
@@ -401,7 +395,6 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Number of Seats Input */}
               <View className="mb-5">
                 <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-2">
                   Number of Seats
@@ -414,14 +407,13 @@ export default function HomeScreen() {
                     placeholderTextColor="#94A3B8"
                     value={seatCount}
                     onChangeText={setSeatCount}
-                    /* FIX 2: Corrected keyboardDataType to keyboardType */
+
                     keyboardType="number-pad"
                     maxLength={2}
                   />
                 </View>
               </View>
 
-              {/* Table Type Selector */}
               <View className="mb-6">
                 <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-3">
                   Table Category
@@ -438,7 +430,7 @@ export default function HomeScreen() {
                       <Pressable
                         key={item.id}
                         onPress={() => setTableType(item.id)}
-                        /* FIX 3: Removed activeOpacity prop from Pressable */
+
                         className={`flex-1 py-3.5 px-2 rounded-2xl border items-center justify-center ${
                           selected
                             ? "bg-purple-50/80 border-[#35116B]"
@@ -463,7 +455,6 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Error Message */}
               {tableError ? (
                 <View className="flex-row items-center bg-red-50 border border-red-200/60 p-3 rounded-xl mb-4 gap-2">
                   <Ionicons
@@ -477,7 +468,6 @@ export default function HomeScreen() {
                 </View>
               ) : null}
 
-              {/* Action Buttons */}
               <View className="flex-row gap-3 pt-1">
                 <TouchableOpacity
                   onPress={() => {

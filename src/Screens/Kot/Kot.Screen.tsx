@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   Text,
   View,
@@ -11,26 +12,87 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import {
+  DEFAULT_PRINTER_CONFIG,
+  isValidIPv4,
+  loadPrinterConfig,
+  printTestPage,
+  savePrinterConfig,
+} from "@/utils/printer";
+
 const BRAND = "#35116B";
 
 export default function KotScreen() {
   const router = useRouter();
 
-  const [kotPrinterIp, setKotPrinterIp] = useState("192.168.1.150");
-  const [billingPrinterIp, setBillingPrinterIp] = useState("192.168.1.200");
+  const [kotPrinterIp, setKotPrinterIp] = useState(
+    DEFAULT_PRINTER_CONFIG.kotIp,
+  );
+  const [billingPrinterIp, setBillingPrinterIp] = useState(
+    DEFAULT_PRINTER_CONFIG.billingIp,
+  );
+  const [printingKot, setPrintingKot] = useState(false);
+  const [printingBilling, setPrintingBilling] = useState(false);
 
-  const handleSaveKotPrinter = () => {
+  useEffect(() => {
+    loadPrinterConfig().then((config) => {
+      setKotPrinterIp(config.kotIp);
+      setBillingPrinterIp(config.billingIp);
+    });
+  }, []);
+
+  const handleSaveKotPrinter = async () => {
+    if (!isValidIPv4(kotPrinterIp)) {
+      Alert.alert("Invalid IP", "Please enter a valid IPv4 address.");
+      return;
+    }
+    const current = await loadPrinterConfig();
+    await savePrinterConfig({ ...current, kotIp: kotPrinterIp.trim() });
     Alert.alert(
       "KOT Printer Saved",
-      `KOT Kitchen Printer IP updated to: ${kotPrinterIp}`,
+      `KOT Kitchen Printer IP updated to: ${kotPrinterIp.trim()}`,
     );
   };
 
-  const handleSaveBillingPrinter = () => {
+  const handleSaveBillingPrinter = async () => {
+    if (!isValidIPv4(billingPrinterIp)) {
+      Alert.alert("Invalid IP", "Please enter a valid IPv4 address.");
+      return;
+    }
+    const current = await loadPrinterConfig();
+    await savePrinterConfig({
+      ...current,
+      billingIp: billingPrinterIp.trim(),
+    });
     Alert.alert(
       "Billing Printer Saved",
-      `Billing Printer IP updated to: ${billingPrinterIp}`,
+      `Billing Printer IP updated to: ${billingPrinterIp.trim()}`,
     );
+  };
+
+  const handleTestPrint = async (
+    which: "kot" | "billing",
+    host: string,
+    label: string,
+  ) => {
+    if (!isValidIPv4(host)) {
+      Alert.alert("Invalid IP", "Save a valid printer IP address first.");
+      return;
+    }
+    const setPrinting = which === "kot" ? setPrintingKot : setPrintingBilling;
+    setPrinting(true);
+    try {
+      const config = await loadPrinterConfig();
+      await printTestPage(host.trim(), label, config.port);
+      Alert.alert("Print Sent", `Test page sent to the ${label} printer.`);
+    } catch (e) {
+      Alert.alert(
+        "Print Failed",
+        e instanceof Error ? e.message : "Could not reach the printer.",
+      );
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const handleLogout = () => {
@@ -110,6 +172,20 @@ export default function KotScreen() {
                 Save KOT Printer IP
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleTestPrint("kot", kotPrinterIp, "KOT")}
+              activeOpacity={0.85}
+              disabled={printingKot}
+              className="bg-emerald-500 py-3 rounded-2xl items-center justify-center shadow-sm flex-row gap-2 disabled:opacity-60"
+            >
+              {printingKot && (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
+              <Text className="text-white font-bold text-xs">
+                {printingKot ? "Printing..." : "Print Test Page"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -144,6 +220,22 @@ export default function KotScreen() {
             >
               <Text className="text-white font-bold text-xs">
                 Save Billing Printer IP
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() =>
+                handleTestPrint("billing", billingPrinterIp, "Billing")
+              }
+              activeOpacity={0.85}
+              disabled={printingBilling}
+              className="bg-emerald-500 py-3 rounded-2xl items-center justify-center shadow-sm flex-row gap-2 disabled:opacity-60"
+            >
+              {printingBilling && (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              )}
+              <Text className="text-white font-bold text-xs">
+                {printingBilling ? "Printing..." : "Print Test Page"}
               </Text>
             </TouchableOpacity>
           </View>
