@@ -14,7 +14,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 const BRAND = "#35116B";
 
-// Dummy food menu for quick booking
 const DUMMY_FOOD_ITEMS = [
   { id: "f1", name: "Cold Coffee", price: 120 },
   { id: "f2", name: "Cheese Pizza", price: 280 },
@@ -23,7 +22,6 @@ const DUMMY_FOOD_ITEMS = [
   { id: "f5", name: "French Fries", price: 110 },
 ];
 
-// Initial tables state (bookedAt stores the timestamp for active tables)
 const INITIAL_TABLES = [
   {
     id: "T1",
@@ -37,7 +35,7 @@ const INITIAL_TABLES = [
     status: "Occupied",
     itemsCount: "4 Items",
     price: "₹650",
-    bookedAt: Date.now() - 35 * 60 * 1000, // 35 minutes ago
+    bookedAt: Date.now() - 35 * 60 * 1000,
   },
   {
     id: "T3",
@@ -51,16 +49,15 @@ const INITIAL_TABLES = [
     status: "Occupied",
     itemsCount: "6 Items",
     price: "₹1,250",
-    bookedAt: Date.now() - 70 * 60 * 1000, // 1 hour 10 mins ago
+    bookedAt: Date.now() - 70 * 60 * 1000,
   },
 ];
 
 export default function TablesScreen() {
   const router = useRouter();
   const [tables, setTables] = useState(INITIAL_TABLES);
-  const [, setTick] = useState(0); // Used to force-refresh timers every minute
+  const [, setTick] = useState(0);
 
-  // Live timer tick effect (updates every 30 seconds to refresh elapsed time)
   useEffect(() => {
     const interval = setInterval(() => {
       setTick((t) => t + 1);
@@ -68,7 +65,6 @@ export default function TablesScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Helper to format elapsed time from a timestamp
   const getElapsedTime = (bookedAt: number | null) => {
     if (!bookedAt) return "Just now";
     const diffMs = Date.now() - bookedAt;
@@ -82,13 +78,11 @@ export default function TablesScreen() {
     return `${hours}h ${mins}m`;
   };
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [customerName, setCustomerName] = useState("");
   const [selectedFoods, setSelectedFoods] = useState<string[]>([]);
 
-  // Open booking modal for free tables
   const handleTablePress = (table: any) => {
     if (table.status === "Free") {
       setSelectedTable(table);
@@ -100,7 +94,6 @@ export default function TablesScreen() {
     }
   };
 
-  // Toggle food selection
   const toggleFoodItem = (foodName: string) => {
     if (selectedFoods.includes(foodName)) {
       setSelectedFoods(selectedFoods.filter((item) => item !== foodName));
@@ -109,7 +102,6 @@ export default function TablesScreen() {
     }
   };
 
-  // Calculate total price based on selected foods
   const calculateTotal = () => {
     return selectedFoods.reduce((sum, foodName) => {
       const item = DUMMY_FOOD_ITEMS.find((f) => f.name === foodName);
@@ -117,7 +109,6 @@ export default function TablesScreen() {
     }, 0);
   };
 
-  // Confirm booking action with live timer start
   const handleConfirmBooking = () => {
     if (!selectedTable) return;
 
@@ -131,7 +122,7 @@ export default function TablesScreen() {
               status: "Occupied",
               itemsCount: `${selectedFoods.length} Items`,
               price: `₹${total}`,
-              bookedAt: Date.now(), // Starts live timer here
+              bookedAt: Date.now(),
             }
           : t,
       ),
@@ -147,7 +138,13 @@ export default function TablesScreen() {
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-slate-200">
         <View className="flex-row items-center gap-3">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/home" as any);
+              }
+            }}
             activeOpacity={0.7}
             className="w-10 h-10 rounded-2xl items-center justify-center"
           >

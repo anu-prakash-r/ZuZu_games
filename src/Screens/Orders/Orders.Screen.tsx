@@ -14,12 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 
 const BRAND = "#35116B";
 
-// Initial Orders with timestamps (createdAt) for live timers
 const INITIAL_ORDERS = [
   {
     id: "#1041",
     table: "T2",
-    createdAt: Date.now() - 35 * 60 * 1000, // 35 minutes ago
+    createdAt: Date.now() - 35 * 60 * 1000,
     itemsList: [
       { name: "Cold Coffee", qty: 2, price: 120 },
       { name: "Veg Burger", qty: 1, price: 150 },
@@ -28,7 +27,7 @@ const INITIAL_ORDERS = [
   {
     id: "#1042",
     table: "T5",
-    createdAt: Date.now() - 75 * 60 * 1000, // 1 hour 15 minutes ago
+    createdAt: Date.now() - 75 * 60 * 1000,
     itemsList: [
       { name: "Cheese Pizza", qty: 2, price: 280 },
       { name: "French Fries", qty: 1, price: 110 },
@@ -37,7 +36,7 @@ const INITIAL_ORDERS = [
   {
     id: "#1043",
     table: "T4",
-    createdAt: Date.now() - 15 * 60 * 1000, // 15 minutes ago
+    createdAt: Date.now() - 15 * 60 * 1000,
     itemsList: [{ name: "PS5 Hour Pass", qty: 1, price: 200 }],
   },
 ];
@@ -53,9 +52,8 @@ const MENU_ITEMS = [
 export default function OrdersScreen() {
   const router = useRouter();
   const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [, setTick] = useState(0); // Used to force-refresh timers every 30s
+  const [, setTick] = useState(0);
 
-  // Live timer tick effect
   useEffect(() => {
     const interval = setInterval(() => {
       setTick((t) => t + 1);
@@ -63,7 +61,6 @@ export default function OrdersScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Helper to format elapsed time
   const getElapsedTime = (createdAt: number) => {
     const diffMs = Date.now() - createdAt;
     const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -76,26 +73,21 @@ export default function OrdersScreen() {
     return `${hours}h ${mins}m`;
   };
 
-  // Edit / Add Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any>(null);
 
-  // Bill Receipt Modal State
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billingOrder, setBillingOrder] = useState<any>(null);
 
-  // Calculate order total
   const getOrderTotal = (itemsList: any[]) => {
     return itemsList.reduce((sum, item) => sum + item.price * item.qty, 0);
   };
 
-  // Open edit order modal
   const handleEditOrder = (order: any) => {
-    setActiveOrder(JSON.parse(JSON.stringify(order))); // Deep copy
+    setActiveOrder(JSON.parse(JSON.stringify(order)));
     setIsModalOpen(true);
   };
 
-  // Increment item quantity (+ button)
   const handleIncreaseQty = (index: number) => {
     if (!activeOrder) return;
     const updatedList = [...activeOrder.itemsList];
@@ -103,7 +95,6 @@ export default function OrdersScreen() {
     setActiveOrder({ ...activeOrder, itemsList: updatedList });
   };
 
-  // Decrement item quantity (- button)
   const handleDecreaseQty = (index: number) => {
     if (!activeOrder) return;
     const updatedList = [...activeOrder.itemsList];
@@ -115,7 +106,6 @@ export default function OrdersScreen() {
     setActiveOrder({ ...activeOrder, itemsList: updatedList });
   };
 
-  // Add new menu item to active order
   const handleAddItem = (menuItem: any) => {
     if (!activeOrder) return;
     const existing = activeOrder.itemsList.find(
@@ -133,14 +123,11 @@ export default function OrdersScreen() {
     setActiveOrder({ ...activeOrder });
   };
 
-  // Save edited order
   const handleSaveOrder = () => {
     setOrders(orders.map((o) => (o.id === activeOrder.id ? activeOrder : o)));
     setIsModalOpen(false);
   };
 
-  // Delete entire order
-  // Delete entire order with confirmation alert
   const handleDeleteOrder = (orderId: string) => {
     Alert.alert(
       "Delete Order",
@@ -162,13 +149,11 @@ export default function OrdersScreen() {
     );
   };
 
-  // Open Bill / Checkout Modal
   const handleFinishBill = (order: any) => {
     setBillingOrder(order);
     setIsBillModalOpen(true);
   };
 
-  // Complete Payment & Close Table
   const handleCompletePayment = () => {
     if (!billingOrder) return;
     setOrders(orders.filter((o) => o.id !== billingOrder.id));
@@ -180,7 +165,13 @@ export default function OrdersScreen() {
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-slate-200">
         <View className="flex-row items-center gap-3">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/home" as any);
+              }
+            }}
             activeOpacity={0.7}
             className="w-10 h-10 rounded-2xl items-center justify-center"
           >
@@ -192,7 +183,6 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      {/* ORDERS LIST */}
       <ScrollView
         className="flex-1 px-5 pt-5"
         showsVerticalScrollIndicator={false}
@@ -218,7 +208,6 @@ export default function OrdersScreen() {
                 key={order.id}
                 className="bg-white border border-slate-300 p-5 rounded-3xl  justify-between"
               >
-                {/* Card Header: Big Table Number & Live Timer Badge */}
                 <View className="flex-row items-center justify-between pb-3 border-b border-slate-100">
                   <View className="flex-row items-center gap-3">
                     <View className="w-12 h-12 rounded-2xl bg-purple-50 items-center justify-center border border-purple-100">
@@ -236,7 +225,6 @@ export default function OrdersScreen() {
                     </View>
                   </View>
 
-                  {/* LIVE DURATION TIMER BADGE */}
                   <View className="flex-row items-center gap-1 bg-amber-500/15 px-2.5 py-1 rounded-xl border border-amber-400/30">
                     <Ionicons name="time-outline" size={13} color="#D97706" />
                     <Text className="text-amber-700 font-bold text-xs">
@@ -245,7 +233,6 @@ export default function OrdersScreen() {
                   </View>
                 </View>
 
-                {/* Food Details List */}
                 <View className="py-3 gap-2">
                   <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                     Ordered Items ({totalItemsCount})
@@ -265,7 +252,6 @@ export default function OrdersScreen() {
                   ))}
                 </View>
 
-                {/* Card Footer: Total Price & Actions */}
                 <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
                   <View>
                     <Text className="text-slate-400 text-[10px] uppercase font-bold">
@@ -355,7 +341,6 @@ export default function OrdersScreen() {
                     </Text>
                   </View>
 
-                  {/* PLUS AND MINUS QUANTITY CONTROLLER */}
                   <View className="flex-row items-center gap-3 bg-white px-3 py-2 rounded-xl border border-slate-200">
                     <TouchableOpacity
                       onPress={() => handleDecreaseQty(idx)}
@@ -421,7 +406,6 @@ export default function OrdersScreen() {
         </Pressable>
       </Modal>
 
-      {/* FINISH BILL & CHECKOUT MODAL */}
       <Modal
         visible={isBillModalOpen}
         transparent

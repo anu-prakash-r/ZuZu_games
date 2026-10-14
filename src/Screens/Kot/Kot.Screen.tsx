@@ -16,7 +16,6 @@ const BRAND = "#35116B";
 export default function KotScreen() {
   const router = useRouter();
 
-  // Separate Printer IP States
   const [kotPrinterIp, setKotPrinterIp] = useState("192.168.1.150");
   const [billingPrinterIp, setBillingPrinterIp] = useState("192.168.1.200");
 
@@ -51,11 +50,15 @@ export default function KotScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      {/* TOP HEADER: BACK ARROW (LEFT) | SETTINGS (CENTER) */}
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-slate-200">
-        {/* LEFT: BACK ARROW */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/home" as any);
+            }
+          }}
           activeOpacity={0.7}
           className="w-10 h-10 rounded-2xl items-center justify-center"
         >
