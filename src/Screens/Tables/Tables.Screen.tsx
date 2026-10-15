@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -14,45 +15,64 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { productPrice } from "@/api/products";
+import { fetchTables, type ApiTable } from "@/api/tables";
 import { useProducts } from "@/hooks/useProducts";
+import { useAuth } from "@/context/AuthContext";
 
 const BRAND = "#35116B";
 
-interface RoomTable {
-  id: string;
-  seats: number;
-  status: "Free" | "Occupied";
-  bookedAt: number | null;
-  itemsCount?: string;
-  price?: string;
+interface LocalBooking {
+  itemsCount: string;
+  price: string;
+  bookedAt: number;
 }
 
-const INITIAL_TABLES: RoomTable[] = [
-  {
-    id: "T1",
-    seats: 2,
-    status: "Free",
-    bookedAt: null,
-  },
-  {
-    id: "T2",
-    seats: 4,
-    status: "Free",
-    bookedAt: null,
-  },
-  {
-    id: "T3",
-    seats: 4,
-    status: "Free",
-    bookedAt: null,
-  },
-  { id: "T4", seats: 6, status: "Free", bookedAt: null },
-];
+/** API sends "2026-10-15 14:32:02" — normalize so every engine parses it. */
+function parseApiDate(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value.replace(" ", "T"));
+  return Number.isNaN(parsed) ? null : parsed;
+}
 
 export default function TablesScreen() {
   const router = useRouter();
-  const [tables, setTables] = useState(INITIAL_TABLES);
+  const { token } = useAuth();
+  const [apiTables, setApiTables] = useState<ApiTable[]>([]);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [tablesError, setTablesError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // Booking API isn't available yet — confirmed bookings are applied
+  // locally on top of the server data until the next refresh.
+  const [localBookings, setLocalBookings] = useState<
+    Record<number, LocalBooking>
+  >({});
   const [, setTick] = useState(0);
+
+  const loadTables = useCallback(
+    async (showSpinner = true) => {
+      if (!token) return;
+      if (showSpinner) setIsLoadingTables(true);
+      setTablesError(null);
+      try {
+        const data = await fetchTables(token);
+        console.log("[tables]", data);
+        setApiTables(data);
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : "Failed to load tables.";
+        console.log("[tables] failed:", message);
+        setTablesError(message);
+      } finally {
+        setIsLoadingTables(false);
+        setRefreshing(false);
+      }
+    },
+    [token],
+  );
+
+  useEffect(() => {
+    loadTables(true);
+  }, [loadTables]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -60,6 +80,17 @@ export default function TablesScreen() {
     }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadTables(false);
+  };
+
+  const isTableFree = (table: ApiTable) =>
+    !localBookings[table.id] && !table.booking;
+
+  const getTableBookedAt = (table: ApiTable): number | null =>
+    localBookings[table.id]?.bookedAt ?? parseApiDate(table.booking?.start_at);
 
   const getElapsedTime = (bookedAt: number | null) => {
     if (!bookedAt) return "Just now";
@@ -75,7 +106,7 @@ export default function TablesScreen() {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTable, setSelectedTable] = useState<any>(null);
+  const [selectedTable, setSelectedTable] = useState<ApiTable | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [menuSearch, setMenuSearch] = useState("");
@@ -87,16 +118,12 @@ export default function TablesScreen() {
     refetch: refetchProducts,
   } = useProducts(isModalOpen);
 
-  const handleTablePress = (table: any) => {
-    if (table.status === "Free") {
-      setSelectedTable(table);
-      setCustomerName("");
-      setQuantities({});
-      setMenuSearch("");
-      setIsModalOpen(true);
-    } else {
-      router.push("/orders" as any);
-    }
+  const handleTablePress = (table: ApiTable) => {
+    setSelectedTable(table);
+    setCustomerName(table.booking?.contact_name?.trim() ?? "");
+    setQuantities({});
+    setMenuSearch("");
+    setIsModalOpen(true);
   };
 
   const changeQty = (productId: number, delta: number) => {
@@ -130,24 +157,20 @@ export default function TablesScreen() {
 
     const total = calculateTotal();
 
-    setTables((prevTables) =>
-      prevTables.map((t) =>
-        t.id === selectedTable.id
-          ? {
-              ...t,
-              status: "Occupied",
-              itemsCount: `${totalItems} Items`,
-              price: `₹${total}`,
-              bookedAt: Date.now(),
-            }
-          : t,
-      ),
-    );
+    setLocalBookings((prev) => ({
+      ...prev,
+      [selectedTable.id]: {
+        itemsCount: `${totalItems} Items`,
+        price: `₹${total}`,
+        bookedAt: Date.now(),
+      },
+    }));
 
     setIsModalOpen(false);
   };
 
-  const freeCount = tables.filter((t) => t.status === "Free").length;
+  const occupiedTables = apiTables.filter((t) => !isTableFree(t));
+  const selectedIsOccupied = !!selectedTable && !isTableFree(selectedTable);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -179,123 +202,154 @@ export default function TablesScreen() {
         className="flex-1 px-5 pt-5"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={BRAND}
+          />
+        }
       >
         <View className="flex-row items-center justify-between mb-4">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-            All Rooms ({tables.length})
+            Occupied Rooms ({occupiedTables.length})
           </Text>
-          <View className="flex-row items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            <View className="w-2 h-2 rounded-full bg-emerald-500" />
-            <Text className="text-emerald-700 text-[11px] font-bold">
-              {freeCount} Free
-            </Text>
-          </View>
         </View>
 
-        <View className="flex-row flex-wrap justify-between gap-y-4">
-          {tables.map((table) => {
-            const isFree = table.status === "Free";
-            const liveTime = getElapsedTime(table.bookedAt);
+        {isLoadingTables && apiTables.length === 0 ? (
+          <View className="items-center py-16 gap-2">
+            <ActivityIndicator size="large" color={BRAND} />
+            <Text className="text-slate-400 text-xs font-semibold">
+              Loading rooms...
+            </Text>
+          </View>
+        ) : tablesError && apiTables.length === 0 ? (
+          <View className="items-center py-10 px-4 bg-red-50 border border-red-200/60 rounded-3xl gap-2">
+            <Ionicons name="cloud-offline-outline" size={28} color="#DC2626" />
+            <Text className="text-red-700 text-xs font-semibold text-center">
+              {tablesError}
+            </Text>
+            <TouchableOpacity
+              onPress={() => loadTables(true)}
+              activeOpacity={0.8}
+              className="bg-[#35116B] px-5 py-2.5 rounded-xl mt-1"
+            >
+              <Text className="text-white font-bold text-xs">Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : occupiedTables.length === 0 ? (
+          <View className="items-center py-16 gap-1.5">
+            <Ionicons
+              name="game-controller-outline"
+              size={30}
+              color="#CBD5E1"
+            />
+            <Text className="text-slate-500 font-bold text-sm">
+              No occupied rooms
+            </Text>
+            <Text className="text-slate-400 text-xs">
+              All rooms are currently free.
+            </Text>
+          </View>
+        ) : (
+          <View className="flex-row flex-wrap justify-between gap-y-4">
+            {occupiedTables.map((table) => {
+              const override = localBookings[table.id];
+              const liveTime = getElapsedTime(getTableBookedAt(table));
+              const guestName = table.booking?.contact_name?.trim() || "Guest";
+              const guestCount =
+                table.booking?.total_head_count ??
+                table.booking?.head_count ??
+                0;
 
-            return (
-              <Pressable
-                key={table.id}
-                onPress={() => handleTablePress(table)}
-                className={`w-[48%] h-52 p-4 rounded-3xl justify-between border shadow-sm transition-all active:scale-95 ${
-                  isFree
-                    ? "bg-emerald-50/80 border-emerald-300/80 shadow-emerald-500/10"
-                    : "bg-[#35116B] border-[#35116B] shadow-purple-900/20"
-                }`}
-              >
-                <View className="flex-row items-center justify-between">
-                  <View
-                    className={`px-3 py-1 rounded-xl flex-row items-center gap-1 ${
-                      isFree
-                        ? "bg-emerald-500"
-                        : "bg-white/10 border border-white/20"
-                    }`}
-                  >
-                    <Ionicons name="restaurant" size={12} color="#FFFFFF" />
-                    <Text className="font-black text-sm text-white">
-                      {table.id}
-                    </Text>
-                  </View>
+              return (
+                <Pressable
+                  key={table.id}
+                  onPress={() => handleTablePress(table)}
+                  className="w-[48%] h-52 p-4 rounded-3xl justify-between border shadow-sm transition-all active:scale-95 bg-[#35116B] border-[#35116B] shadow-purple-900/20"
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className="px-3 py-1 rounded-xl flex-row items-center gap-1 bg-white/10 border border-white/20">
+                      <Ionicons name="restaurant" size={12} color="#FFFFFF" />
+                      <Text
+                        className="font-black text-sm text-white"
+                        numberOfLines={1}
+                      >
+                        {table.name}
+                      </Text>
+                    </View>
 
-                  {isFree ? (
-                    <Text className="text-emerald-700 font-bold text-xs">
-                      {table.seats} Seats
-                    </Text>
-                  ) : (
                     <View className="flex-row items-center gap-1 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-400/30">
                       <Ionicons name="time-outline" size={11} color="#FBBF24" />
                       <Text className="text-amber-300 font-bold text-[11px]">
                         {liveTime}
                       </Text>
                     </View>
-                  )}
-                </View>
+                  </View>
 
-                <View className="my-1">
-                  {isFree ? (
-                    <View>
-                      <Text className="text-emerald-900 font-extrabold text-lg tracking-tight">
-                        Available
-                      </Text>
-                      <Text className="text-emerald-700/80 text-xs font-medium mt-0.5">
-                        Ready for order
-                      </Text>
-                    </View>
-                  ) : (
-                    <View>
-                      <View className="flex-row items-center gap-1.5 mb-1">
-                        <Ionicons
-                          name="fast-food-outline"
-                          size={14}
-                          color="#D8B4FE"
-                        />
-                        <Text className="text-purple-200 text-xs font-bold">
-                          {table.itemsCount ?? "0 Items"}
+                  <View className="my-1">
+                    {override ? (
+                      <View>
+                        <View className="flex-row items-center gap-1.5 mb-1">
+                          <Ionicons
+                            name="fast-food-outline"
+                            size={14}
+                            color="#D8B4FE"
+                          />
+                          <Text className="text-purple-200 text-xs font-bold">
+                            {override.itemsCount}
+                          </Text>
+                        </View>
+                        <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
+                          Total Amount
+                        </Text>
+                        <Text className="text-white font-black text-2xl tracking-tight">
+                          {override.price}
                         </Text>
                       </View>
-                      <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
-                        Total Amount
-                      </Text>
-                      <Text className="text-white font-black text-2xl tracking-tight">
-                        {table.price ?? "₹0"}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View
-                  className={`pt-2 border-t flex-row items-center justify-between ${
-                    isFree ? "border-emerald-200/80" : "border-white/10"
-                  }`}
-                >
-                  <Text
-                    className={`text-[11px] font-bold ${
-                      isFree ? "text-emerald-700" : "text-purple-300"
-                    }`}
-                  >
-                    {isFree ? "Tap to Book" : "View Order"}
-                  </Text>
-
-                  <View
-                    className={`w-7 h-7 rounded-xl items-center justify-center ${
-                      isFree ? "bg-emerald-600" : "bg-white"
-                    }`}
-                  >
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color={isFree ? "#FFFFFF" : "#35116B"}
-                    />
+                    ) : (
+                      <View>
+                        <View className="flex-row items-center gap-1.5 mb-1">
+                          <Ionicons
+                            name="person-outline"
+                            size={14}
+                            color="#D8B4FE"
+                          />
+                          <Text
+                            className="text-purple-200 text-xs font-bold flex-1"
+                            numberOfLines={1}
+                          >
+                            {guestName}
+                          </Text>
+                        </View>
+                        <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
+                          Guests
+                        </Text>
+                        <Text className="text-white font-black text-2xl tracking-tight">
+                          {guestCount}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+
+                  <View className="pt-2 border-t flex-row items-center justify-between border-white/10">
+                    <Text className="text-[11px] font-bold text-purple-300">
+                      Add Items
+                    </Text>
+
+                    <View className="w-7 h-7 rounded-xl items-center justify-center bg-white">
+                      <Ionicons
+                        name="arrow-forward"
+                        size={14}
+                        color="#35116B"
+                      />
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -309,10 +363,12 @@ export default function TablesScreen() {
             <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <View>
                 <Text className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                  New Reservation
+                  {selectedIsOccupied ? "Running Order" : "New Reservation"}
                 </Text>
                 <Text className="text-xl font-extrabold text-[#35116B]">
-                  Book {selectedTable?.id}
+                  {selectedIsOccupied
+                    ? `Add Items — ${selectedTable?.name}`
+                    : `Book ${selectedTable?.name}`}
                 </Text>
               </View>
 

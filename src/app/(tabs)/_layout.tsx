@@ -62,14 +62,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="orders"
         options={{
+          href: null,
           title: "Orders",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "receipt" : "receipt-outline"}
-              size={24}
-              color={color}
-            />
-          ),
         }}
       />
 

@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  StatusBar,
   TextInput,
   TouchableOpacity,
   View,
@@ -17,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { useAuth } from "@/context/AuthContext";
+import { useTables } from "@/hooks/useTables";
 
 const BRAND = "#35116B";
 
@@ -57,9 +59,14 @@ export default function HomeScreen() {
     { id: string; tableNo: string; seats: number; type: string }[]
   >([]);
   const [tableError, setTableError] = useState("");
-  const totalTables = 15;
-  const occupiedTables = 9;
+  const { tables, isLoading: tablesLoading } = useTables();
+  const totalTables = tables.length;
+  const occupiedTables = tables.filter((t) => !!t.booking).length;
   const availableTables = totalTables - occupiedTables;
+  const countsReady = !tablesLoading || tables.length > 0;
+  const displayTotal = countsReady ? totalTables : "–";
+  const displayOccupied = countsReady ? occupiedTables : "–";
+  const displayAvailable = countsReady ? availableTables : "–";
   const handleCreateTable = () => {
     const number = tableNumber.trim();
     const seats = Number(seatCount);
@@ -109,6 +116,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F7FB" />
       <View className="px-5 pt-4 pb-3 border-b border-slate-200">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center space-x-3">
@@ -154,9 +162,9 @@ export default function HomeScreen() {
               </View>
               <View>
                 <Text className="text-white text-3xl font-black tracking-tight">
-                  {availableTables}
+                  {displayAvailable}
                   <Text className="text-white text-base font-medium">
-                    /{totalTables}
+                    /{displayTotal}
                   </Text>
                 </Text>
                 <Text className="text-white text-[11px] font-semibold mt-1">
@@ -176,49 +184,17 @@ export default function HomeScreen() {
               </View>
               <View>
                 <Text className="text-black text-3xl font-black tracking-tight">
-                  {occupiedTables}
+                  {displayOccupied}
                   <Text className="text-black text-base font-medium">
-                    /{totalTables}
+                    /{displayTotal}
                   </Text>
                 </Text>
-                <Text className="text-amber-500 text-[11px] font-semibold mt-1">
+                <Text className="text-black text-[11px] font-semibold mt-1">
                   ● Currently Active
                 </Text>
               </View>
             </View>
           </View>
-
-          <View className="mt-1 mb-6">
-            <Pressable
-              onPress={() => {
-                setTableError("");
-                setCreateTableVisible(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Add more tables"
-              className="bg-emerald-50 border border-[#059669] p-4 rounded-2xl flex-row items-center justify-between active:bg-emerald-100"
-            >
-              <View className="flex-row items-center gap-3.5 flex-1 pr-2">
-                <View className="w-10 h-10 rounded-xl bg-emerald-500 items-center justify-center shadow-sm">
-                  <Ionicons name="add" size={22} color="#FFFFFF" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-emerald-900 font-bold text-base">
-                    Add More Rooms
-                  </Text>
-
-                  <Text
-                    className="text-emerald-700/80 text-xs"
-                    numberOfLines={1}
-                  >
-                    Expand capacity and configure new spots.
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#059669" />
-            </Pressable>
-          </View>
-
           <View className="flex-row items-center justify-between mb-2 px-1">
             <Text className="text-slate-500 text-base font-extrabold tracking-tight">
               Active Room Sessions
