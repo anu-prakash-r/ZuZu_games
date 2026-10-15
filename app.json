@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ZuZu Games Cafe",
-    "slug": "zuzu-games-cafe",
+    "slug": "Zuzu_games",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/SaraS-Web-Solution.png",
@@ -37,7 +37,8 @@
             "image": "./assets/images/SaraS-Web-Solution.png"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

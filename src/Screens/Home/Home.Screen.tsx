@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,6 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { router } from "expo-router";
+
+import { useAuth } from "@/context/AuthContext";
 
 const BRAND = "#35116B";
 
@@ -46,6 +48,7 @@ const ACTIVE_TABLES = [
 ];
 
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [createTableVisible, setCreateTableVisible] = useState(false);
   const [tableNumber, setTableNumber] = useState("");
   const [seatCount, setSeatCount] = useState("4");
@@ -104,21 +107,6 @@ export default function HomeScreen() {
     setCreateTableVisible(false);
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to log out of ZuZu Games Cafe?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: () => router.replace("/" as any),
-        },
-      ],
-    );
-  };
-
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <View className="px-5 pt-4 pb-3 border-b border-slate-200">
@@ -131,7 +119,8 @@ export default function HomeScreen() {
             <View className="justify-center ml-3">
               <View className="flex-row items-center space-x-1.5">
                 <Text className="text-slate-500 text-xs font-medium tracking-wide">
-                  Hello, Welcome back!
+                  Hello{user?.name ? `, ${user.name.trim()}` : ""}! Welcome
+                  back!
                 </Text>
                 <Text className="text-xs">👋</Text>
               </View>

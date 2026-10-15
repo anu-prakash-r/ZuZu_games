@@ -1,7 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import TcpSocket from "react-native-tcp-socket";
 
-const STORAGE_KEY = "@zuzu_games:printers";
+const STORAGE_KEY = "zuzu_printers_config";
+
+let memoryCache: PrinterConfig | null = null;
 
 export interface PrinterConfig {
   kotIp: string;
@@ -17,10 +19,10 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
 
 export async function loadPrinterConfig(): Promise<PrinterConfig> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PRINTER_CONFIG;
+    const raw = await SecureStore.getItemAsync(STORAGE_KEY);
+    if (!raw) return memoryCache ?? DEFAULT_PRINTER_CONFIG;
     const parsed = JSON.parse(raw);
-    return {
+    const config = {
       kotIp:
         typeof parsed.kotIp === "string"
           ? parsed.kotIp
@@ -34,13 +36,20 @@ export async function loadPrinterConfig(): Promise<PrinterConfig> {
           ? parsed.port
           : DEFAULT_PRINTER_CONFIG.port,
     };
+    memoryCache = config;
+    return config;
   } catch {
-    return DEFAULT_PRINTER_CONFIG;
+    return memoryCache ?? DEFAULT_PRINTER_CONFIG;
   }
 }
 
 export async function savePrinterConfig(config: PrinterConfig): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  memoryCache = config;
+  try {
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.warn("Could not persist printer config", e);
+  }
 }
 
 export function isValidIPv4(ip: string): boolean {

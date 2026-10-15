@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
@@ -12,17 +13,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { productPrice } from "@/api/products";
+import { useProducts } from "@/hooks/useProducts";
+
 const BRAND = "#35116B";
 
-const DUMMY_FOOD_ITEMS = [
-  { id: "f1", name: "Cold Coffee", price: 120 },
-  { id: "f2", name: "Cheese Pizza", price: 280 },
-  { id: "f3", name: "Veg Burger", price: 150 },
-  { id: "f4", name: "PS5 Hour Pass", price: 200 },
-  { id: "f5", name: "French Fries", price: 110 },
-];
+interface RoomTable {
+  id: string;
+  seats: number;
+  status: "Free" | "Occupied";
+  bookedAt: number | null;
+  itemsCount?: string;
+  price?: string;
+}
 
-const INITIAL_TABLES = [
+const INITIAL_TABLES: RoomTable[] = [
   {
     id: "T1",
     seats: 2,
@@ -32,10 +37,8 @@ const INITIAL_TABLES = [
   {
     id: "T2",
     seats: 4,
-    status: "Occupied",
-    itemsCount: "4 Items",
-    price: "₹650",
-    bookedAt: Date.now() - 35 * 60 * 1000,
+    status: "Free",
+    bookedAt: null,
   },
   {
     id: "T3",
@@ -43,14 +46,7 @@ const INITIAL_TABLES = [
     status: "Free",
     bookedAt: null,
   },
-  {
-    id: "T4",
-    seats: 6,
-    status: "Occupied",
-    itemsCount: "6 Items",
-    price: "₹1,250",
-    bookedAt: Date.now() - 70 * 60 * 1000,
-  },
+  { id: "T4", seats: 6, status: "Free", bookedAt: null },
 ];
 
 export default function TablesScreen() {
@@ -81,32 +77,52 @@ export default function TablesScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [customerName, setCustomerName] = useState("");
-  const [selectedFoods, setSelectedFoods] = useState<string[]>([]);
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const [menuSearch, setMenuSearch] = useState("");
+
+  const {
+    products,
+    isLoading: productsLoading,
+    error: productsError,
+    refetch: refetchProducts,
+  } = useProducts(isModalOpen);
 
   const handleTablePress = (table: any) => {
     if (table.status === "Free") {
       setSelectedTable(table);
       setCustomerName("");
-      setSelectedFoods([]);
+      setQuantities({});
+      setMenuSearch("");
       setIsModalOpen(true);
     } else {
       router.push("/orders" as any);
     }
   };
 
-  const toggleFoodItem = (foodName: string) => {
-    if (selectedFoods.includes(foodName)) {
-      setSelectedFoods(selectedFoods.filter((item) => item !== foodName));
-    } else {
-      setSelectedFoods([...selectedFoods, foodName]);
-    }
+  const changeQty = (productId: number, delta: number) => {
+    setQuantities((prev) => {
+      const next = Math.max(0, (prev[productId] ?? 0) + delta);
+      const copy = { ...prev };
+      if (next === 0) {
+        delete copy[productId];
+      } else {
+        copy[productId] = next;
+      }
+      return copy;
+    });
   };
 
+  const filteredProducts = products.filter((p) =>
+    p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
+  );
+
+  const totalItems = Object.values(quantities).reduce((s, q) => s + q, 0);
+
   const calculateTotal = () => {
-    return selectedFoods.reduce((sum, foodName) => {
-      const item = DUMMY_FOOD_ITEMS.find((f) => f.name === foodName);
-      return sum + (item ? item.price : 0);
-    }, 0);
+    return products.reduce(
+      (sum, p) => sum + (quantities[p.product_id] ?? 0) * productPrice(p),
+      0,
+    );
   };
 
   const handleConfirmBooking = () => {
@@ -120,7 +136,7 @@ export default function TablesScreen() {
           ? {
               ...t,
               status: "Occupied",
-              itemsCount: `${selectedFoods.length} Items`,
+              itemsCount: `${totalItems} Items`,
               price: `₹${total}`,
               bookedAt: Date.now(),
             }
@@ -238,14 +254,14 @@ export default function TablesScreen() {
                           color="#D8B4FE"
                         />
                         <Text className="text-purple-200 text-xs font-bold">
-                          {table.itemsCount}
+                          {table.itemsCount ?? "0 Items"}
                         </Text>
                       </View>
                       <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
                         Total Amount
                       </Text>
                       <Text className="text-white font-black text-2xl tracking-tight">
-                        {table.price}
+                        {table.price ?? "₹0"}
                       </Text>
                     </View>
                   )}
@@ -309,68 +325,172 @@ export default function TablesScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View className="mb-4">
-                <Text className="text-slate-700 font-bold text-xs uppercase mb-1.5">
-                  Customer Name
-                </Text>
-                <TextInput
-                  placeholder="Enter guest name"
-                  placeholderTextColor="#94A3B8"
-                  value={customerName}
-                  onChangeText={setCustomerName}
-                  className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-slate-900 text-sm font-semibold"
-                />
-              </View>
-
               <View className="mb-5">
-                <Text className="text-slate-700 font-bold text-xs uppercase mb-2">
-                  Select Items / Orders
-                </Text>
-                <View className="gap-2">
-                  {DUMMY_FOOD_ITEMS.map((item) => {
-                    const isSelected = selectedFoods.includes(item.name);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => toggleFoodItem(item.name)}
-                        className={`flex-row items-center justify-between p-3.5 rounded-2xl border ${
-                          isSelected
-                            ? "bg-[#35116B] border-[#35116B]"
-                            : "bg-slate-50 border-slate-200"
-                        }`}
-                      >
-                        <View className="flex-row items-center gap-3">
-                          <Ionicons
-                            name={isSelected ? "checkbox" : "square-outline"}
-                            size={20}
-                            color={isSelected ? "#fff" : "#94A3B8"}
-                          />
-                          <Text
-                            className={`font-bold text-sm ${
-                              isSelected ? "text-white" : "text-slate-800"
-                            }`}
-                          >
-                            {item.name}
-                          </Text>
-                        </View>
-                        <Text
-                          className={`font-black text-sm ${
-                            isSelected ? "text-white" : "text-[#35116B]"
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-slate-700 font-bold text-xs uppercase">
+                    Select Items / Orders
+                  </Text>
+                  {totalItems > 0 && (
+                    <View className="bg-[#35116B] px-2.5 py-1 rounded-full">
+                      <Text className="text-white text-[11px] font-bold">
+                        {totalItems} selected
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 mb-2.5">
+                  <Ionicons name="search-outline" size={17} color="#94A3B8" />
+                  <TextInput
+                    placeholder="Search menu..."
+                    placeholderTextColor="#94A3B8"
+                    value={menuSearch}
+                    onChangeText={setMenuSearch}
+                    className="flex-1 ml-2 py-3 text-slate-900 text-sm font-medium"
+                  />
+                  {menuSearch.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setMenuSearch("")}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {productsLoading ? (
+                  <View className="items-center py-8 gap-2">
+                    <ActivityIndicator size="large" color={BRAND} />
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      Loading menu...
+                    </Text>
+                  </View>
+                ) : productsError ? (
+                  <View className="items-center py-6 px-4 bg-red-50 border border-red-200/60 rounded-2xl gap-2">
+                    <Ionicons
+                      name="cloud-offline-outline"
+                      size={26}
+                      color="#DC2626"
+                    />
+                    <Text className="text-red-700 text-xs font-semibold text-center">
+                      {productsError}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={refetchProducts}
+                      activeOpacity={0.8}
+                      className="bg-[#35116B] px-5 py-2.5 rounded-xl mt-1"
+                    >
+                      <Text className="text-white font-bold text-xs">
+                        Retry
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : filteredProducts.length === 0 ? (
+                  <View className="items-center py-6 gap-1.5">
+                    <Ionicons
+                      name="fast-food-outline"
+                      size={26}
+                      color="#CBD5E1"
+                    />
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      {products.length === 0
+                        ? "No items available right now."
+                        : "No items match your search."}
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="gap-2">
+                    {filteredProducts.map((item) => {
+                      const qty = quantities[item.product_id] ?? 0;
+                      const isSelected = qty > 0;
+                      return (
+                        <View
+                          key={item.product_id}
+                          className={`flex-row items-center justify-between p-3 rounded-2xl border ${
+                            isSelected
+                              ? "bg-purple-50/70 border-[#35116B]"
+                              : "bg-slate-50 border-slate-200"
                           }`}
                         >
-                          ₹{item.price}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                          <View className="flex-row items-center gap-3 flex-1 pr-2">
+                            <View
+                              className={`w-10 h-10 rounded-xl items-center justify-center ${
+                                isSelected
+                                  ? "bg-[#35116B]"
+                                  : "bg-white border border-slate-200"
+                              }`}
+                            >
+                              <Ionicons
+                                name="fast-food"
+                                size={17}
+                                color={isSelected ? "#FFFFFF" : BRAND}
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <Text
+                                className="text-slate-900 font-bold text-sm"
+                                numberOfLines={1}
+                              >
+                                {item.product_name}
+                              </Text>
+                              <Text className="text-[#35116B] font-extrabold text-xs mt-0.5">
+                                ₹{productPrice(item)}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {isSelected ? (
+                            <View className="flex-row items-center gap-2.5 bg-white px-2 py-1.5 rounded-xl border border-slate-200">
+                              <TouchableOpacity
+                                onPress={() => changeQty(item.product_id, -1)}
+                                activeOpacity={0.7}
+                                className="w-7 h-7 rounded-lg bg-slate-100 items-center justify-center"
+                              >
+                                <Ionicons
+                                  name="remove"
+                                  size={15}
+                                  color={BRAND}
+                                />
+                              </TouchableOpacity>
+                              <Text className="font-extrabold text-slate-900 text-sm min-w-[18px] text-center">
+                                {qty}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => changeQty(item.product_id, 1)}
+                                activeOpacity={0.7}
+                                className="w-7 h-7 rounded-lg bg-[#35116B] items-center justify-center"
+                              >
+                                <Ionicons
+                                  name="add"
+                                  size={15}
+                                  color="#FFFFFF"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={() => changeQty(item.product_id, 1)}
+                              activeOpacity={0.8}
+                              className="flex-row items-center gap-1 bg-[#35116B] px-3.5 py-2 rounded-xl"
+                            >
+                              <Ionicons name="add" size={15} color="#FFFFFF" />
+                              <Text className="text-white font-bold text-xs">
+                                Add
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             </ScrollView>
 
-            <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
+            <View className="pt-2 border-t mb-3 border-slate-100 flex-row items-center justify-between">
               <View>
                 <Text className="text-slate-400 text-[10px] font-bold uppercase">
-                  Estimated Total
+                  {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
                 </Text>
                 <Text className="text-[#35116B] font-black text-2xl">
                   ₹{calculateTotal()}
@@ -380,7 +500,8 @@ export default function TablesScreen() {
               <TouchableOpacity
                 onPress={handleConfirmBooking}
                 activeOpacity={0.85}
-                className="bg-emerald-500 px-6 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20"
+                disabled={totalItems === 0}
+                className="bg-emerald-500 px-6 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
               >
                 <Text className="text-white font-bold text-sm">
                   Confirm Booking

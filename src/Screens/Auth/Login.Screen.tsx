@@ -13,7 +13,9 @@ import {
   useWindowDimensions,
   Alert,
   LayoutAnimation,
+  ActivityIndicator,
 } from "react-native";
+import { useAuth } from "@/context/AuthContext";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -28,14 +30,16 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { signIn } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [focusedInput, setFocusedInput] = useState<"email" | "password" | null>(
-    null,
-  );
+  const [focusedInput, setFocusedInput] = useState<
+    "username" | "password" | null
+  >(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isSmallScreen = height < 700;
   const isWideScreen = width >= 600;
@@ -80,9 +84,9 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     };
   }, []);
 
-  const handleLogin = () => {
-    if (!email.trim()) {
-      Alert.alert("Required", "Please enter your email address.");
+  const handleLogin = async () => {
+    if (!username.trim()) {
+      Alert.alert("Required", "Please enter your username.");
       return;
     }
 
@@ -92,7 +96,18 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }
 
     Keyboard.dismiss();
-    onLoginSuccess?.();
+    setIsSubmitting(true);
+    try {
+      await signIn(username, password);
+      onLoginSuccess?.();
+    } catch (e) {
+      Alert.alert(
+        "Login failed",
+        e instanceof Error ? e.message : "Something went wrong.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -159,40 +174,42 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
                 <View className="mb-5">
                   <Text className="text-white text-sm font-semibold mb-2">
-                    Email Address
+                    Username
                   </Text>
                   <View
                     className={`flex-row items-center h-14 rounded-2xl px-4 border ${
-                      focusedInput === "email"
+                      focusedInput === "username"
                         ? "border-purple-300 bg-white"
                         : "border-white/20 bg-white/10"
                     }`}
                   >
                     <Ionicons
-                      name="mail-outline"
+                      name="person-outline"
                       size={21}
-                      color={focusedInput === "email" ? "#35116B" : "#D8C9F4"}
+                      color={
+                        focusedInput === "username" ? "#35116B" : "#D8C9F4"
+                      }
                     />
                     <TextInput
                       className={`flex-1 ml-3 text-base ${
-                        focusedInput === "email"
+                        focusedInput === "username"
                           ? "text-[#35116B]"
                           : "text-white"
                       }`}
-                      placeholder="Enter your email"
+                      placeholder="Enter your username"
                       placeholderTextColor={
-                        focusedInput === "email" ? "#999999" : "#C4B5D9"
+                        focusedInput === "username" ? "#999999" : "#C4B5D9"
                       }
-                      value={email}
-                      onChangeText={setEmail}
-                      onFocus={() => setFocusedInput("email")}
+                      value={username}
+                      onChangeText={setUsername}
+                      onFocus={() => setFocusedInput("username")}
                       onBlur={() => setFocusedInput(null)}
-                      keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
-                      autoComplete="email"
+                      autoComplete="username"
                       returnKeyType="next"
-                      accessibilityLabel="Email address"
+                      accessibilityLabel="Username"
+                      editable={!isSubmitting}
                     />
                   </View>
                 </View>
@@ -235,6 +252,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                       returnKeyType="done"
                       onSubmitEditing={handleLogin}
                       accessibilityLabel="Password"
+                      editable={!isSubmitting}
                     />
                     <TouchableOpacity
                       onPress={() => setShowPassword(!showPassword)}
@@ -273,14 +291,23 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 <TouchableOpacity
                   onPress={handleLogin}
                   activeOpacity={0.85}
-                  className="bg-white h-14 rounded-2xl items-center justify-center shadow-lg shadow-black/20 mb-7"
+                  disabled={isSubmitting}
+                  className="bg-white h-14 rounded-2xl items-center justify-center shadow-lg shadow-black/20 mb-7 opacity-100 disabled:opacity-70"
                 >
-                  <View className="flex-row items-center">
-                    <Text className="text-[#35116B] font-bold text-base tracking-wide mr-2">
-                      Sign In
-                    </Text>
-                    <Ionicons name="arrow-forward" size={19} color="#35116B" />
-                  </View>
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#35116B" />
+                  ) : (
+                    <View className="flex-row items-center">
+                      <Text className="text-[#35116B] font-bold text-base tracking-wide mr-2">
+                        Sign In
+                      </Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={19}
+                        color="#35116B"
+                      />
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
 

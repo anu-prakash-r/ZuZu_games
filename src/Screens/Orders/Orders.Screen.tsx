@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
   TouchableOpacity,
   Modal,
@@ -12,83 +14,27 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { productPrice, type Product } from "@/api/products";
+import { useProducts } from "@/hooks/useProducts";
+
 const BRAND = "#35116B";
 
-const INITIAL_ORDERS = [
-  {
-    id: "#1041",
-    table: "T2",
-    createdAt: Date.now() - 35 * 60 * 1000,
-    itemsList: [
-      { name: "Cold Coffee", qty: 2, price: 120 },
-      { name: "Veg Burger", qty: 1, price: 150 },
-    ],
-  },
-  {
-    id: "#1042",
-    table: "T5",
-    createdAt: Date.now() - 75 * 60 * 1000,
-    itemsList: [
-      { name: "Cheese Pizza", qty: 2, price: 280 },
-      { name: "French Fries", qty: 1, price: 110 },
-    ],
-  },
-  {
-    id: "#1043",
-    table: "T4",
-    createdAt: Date.now() - 15 * 60 * 1000,
-    itemsList: [{ name: "PS5 Hour Pass", qty: 1, price: 200 }],
-  },
-  {
-    id: "#1044",
-    table: "T1",
-    createdAt: Date.now() - 5 * 60 * 1000,
-    itemsList: [
-      { name: "Chicken Biryani", qty: 2, price: 220 },
-      { name: "Coke (Can)", qty: 2, price: 50 },
-    ],
-  },
-  {
-    id: "#1045",
-    table: "T3",
-    createdAt: Date.now() - 50 * 60 * 1000,
-    itemsList: [
-      { name: "White Sauce Pasta", qty: 1, price: 240 },
-      { name: "Garlic Bread", qty: 1, price: 130 },
-      { name: "Virgin Mojito", qty: 2, price: 140 },
-    ],
-  },
-  {
-    id: "#1046",
-    table: "Takeaway",
-    createdAt: Date.now() - 10 * 60 * 1000,
-    itemsList: [
-      { name: "Paneer Tikka Roll", qty: 3, price: 160 },
-      { name: "Masala Chai", qty: 2, price: 40 },
-    ],
-  },
-  {
-    id: "#1047",
-    table: "T6",
-    createdAt: Date.now() - 120 * 60 * 1000,
-    itemsList: [
-      { name: "VR Gaming 30Mins", qty: 2, price: 250 },
-      { name: "Red Bull", qty: 2, price: 125 },
-    ],
-  },
-];
+interface OrderItem {
+  name: string;
+  qty: number;
+  price: number;
+}
 
-const MENU_ITEMS = [
-  { name: "Cold Coffee", price: 120 },
-  { name: "Cheese Pizza", price: 280 },
-  { name: "Veg Burger", price: 150 },
-  { name: "PS5 Hour Pass", price: 200 },
-  { name: "French Fries", price: 110 },
-];
+interface Order {
+  id: string;
+  table: string;
+  createdAt: number;
+  itemsList: OrderItem[];
+}
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -112,6 +58,14 @@ export default function OrdersScreen() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [menuSearch, setMenuSearch] = useState("");
+
+  const {
+    products,
+    isLoading: menuLoading,
+    error: menuError,
+    refetch: refetchMenu,
+  } = useProducts(isModalOpen);
 
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billingOrder, setBillingOrder] = useState<any>(null);
@@ -122,6 +76,7 @@ export default function OrdersScreen() {
 
   const handleEditOrder = (order: any) => {
     setActiveOrder(JSON.parse(JSON.stringify(order)));
+    setMenuSearch("");
     setIsModalOpen(true);
   };
 
@@ -143,22 +98,27 @@ export default function OrdersScreen() {
     setActiveOrder({ ...activeOrder, itemsList: updatedList });
   };
 
-  const handleAddItem = (menuItem: any) => {
+  const handleAddItem = (product: Product) => {
     if (!activeOrder) return;
+    const price = productPrice(product);
     const existing = activeOrder.itemsList.find(
-      (i: any) => i.name === menuItem.name,
+      (i: any) => i.name === product.product_name,
     );
     if (existing) {
       existing.qty += 1;
     } else {
       activeOrder.itemsList.push({
-        name: menuItem.name,
+        name: product.product_name,
         qty: 1,
-        price: menuItem.price,
+        price,
       });
     }
     setActiveOrder({ ...activeOrder });
   };
+
+  const filteredMenu = products.filter((p) =>
+    p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
+  );
 
   const handleSaveOrder = () => {
     setOrders(orders.map((o) => (o.id === activeOrder.id ? activeOrder : o)));
@@ -231,6 +191,19 @@ export default function OrdersScreen() {
           </Text>
         </View>
 
+        {orders.length === 0 ? (
+          <View className="items-center py-16 gap-2">
+            <View className="w-16 h-16 rounded-full bg-purple-50 items-center justify-center mb-1 border border-purple-100">
+              <Ionicons name="receipt-outline" size={30} color={BRAND} />
+            </View>
+            <Text className="text-slate-900 font-extrabold text-base">
+              No active orders
+            </Text>
+            <Text className="text-slate-400 text-xs text-center px-10 leading-5">
+              Book a room from the Rooms tab and add items to see orders here.
+            </Text>
+          </View>
+        ) : (
         <View className="gap-4">
           {orders.map((order) => {
             const totalAmount = getOrderTotal(order.itemsList);
@@ -335,6 +308,7 @@ export default function OrdersScreen() {
             );
           })}
         </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -405,22 +379,75 @@ export default function OrdersScreen() {
               <Text className="text-slate-700 font-bold text-xs uppercase mt-4 mb-2">
                 Add More Food Items
               </Text>
-              <View className="gap-2">
-                {MENU_ITEMS.map((menuItem, idx) => (
-                  <Pressable
-                    key={idx}
-                    onPress={() => handleAddItem(menuItem)}
-                    className="flex-row items-center justify-between bg-purple-50/50 border border-purple-100 p-3.5 rounded-2xl active:bg-purple-100"
+
+              <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 mb-2">
+                <Ionicons name="search-outline" size={17} color="#94A3B8" />
+                <TextInput
+                  placeholder="Search menu..."
+                  placeholderTextColor="#94A3B8"
+                  value={menuSearch}
+                  onChangeText={setMenuSearch}
+                  className="flex-1 ml-2 py-3 text-slate-900 text-sm font-medium"
+                />
+                {menuSearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setMenuSearch("")}
+                    activeOpacity={0.7}
                   >
-                    <Text className="text-[#35116B] font-bold text-sm">
-                      + {menuItem.name}
-                    </Text>
-                    <Text className="text-[#35116B] font-black text-sm">
-                      ₹{menuItem.price}
-                    </Text>
-                  </Pressable>
-                ))}
+                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
               </View>
+
+              {menuLoading ? (
+                <View className="items-center py-6 gap-2">
+                  <ActivityIndicator size="small" color={BRAND} />
+                  <Text className="text-slate-400 text-xs font-semibold">
+                    Loading menu...
+                  </Text>
+                </View>
+              ) : menuError ? (
+                <View className="items-center py-5 px-4 bg-red-50 border border-red-200/60 rounded-2xl gap-2">
+                  <Text className="text-red-700 text-xs font-semibold text-center">
+                    {menuError}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={refetchMenu}
+                    activeOpacity={0.8}
+                    className="bg-[#35116B] px-5 py-2.5 rounded-xl"
+                  >
+                    <Text className="text-white font-bold text-xs">Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredMenu.length === 0 ? (
+                <View className="items-center py-5">
+                  <Text className="text-slate-400 text-xs font-semibold">
+                    {products.length === 0
+                      ? "No items available right now."
+                      : "No items match your search."}
+                  </Text>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  {filteredMenu.map((product) => (
+                    <Pressable
+                      key={product.product_id}
+                      onPress={() => handleAddItem(product)}
+                      className="flex-row items-center justify-between bg-purple-50/50 border border-purple-100 p-3.5 rounded-2xl active:bg-purple-100"
+                    >
+                      <Text
+                        className="text-[#35116B] font-bold text-sm flex-1 pr-2"
+                        numberOfLines={1}
+                      >
+                        + {product.product_name}
+                      </Text>
+                      <Text className="text-[#35116B] font-black text-sm">
+                        ₹{productPrice(product)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </ScrollView>
 
             <View className="pt-4 border-t border-slate-100 flex-row gap-3">

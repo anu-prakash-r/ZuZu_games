@@ -19,11 +19,13 @@ import {
   printTestPage,
   savePrinterConfig,
 } from "@/utils/printer";
+import { useAuth } from "@/context/AuthContext";
 
 const BRAND = "#35116B";
 
 export default function KotScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
 
   const [kotPrinterIp, setKotPrinterIp] = useState(
     DEFAULT_PRINTER_CONFIG.kotIp,
@@ -104,7 +106,10 @@ export default function KotScreen() {
         {
           text: "Logout",
           style: "destructive",
-          onPress: () => router.replace("/" as any),
+          onPress: async () => {
+            await signOut();
+            router.replace("/" as any);
+          },
         },
       ],
     );
