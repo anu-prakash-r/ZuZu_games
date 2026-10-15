@@ -12,11 +12,19 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: "#94A3B8",
         tabBarStyle: {
           backgroundColor: "#FFFFFF",
-          borderTopColor: "#E2E8F0",
-          borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 6,
+          borderTopColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 5,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          paddingTop: 10,
+          paddingBottom: 24,
+          marginHorizontal: 16,
+          marginBottom: 26,
+          borderRadius: 24,
+          position: "absolute",
         },
         tabBarLabelStyle: {
           fontSize: 10.5,
@@ -41,10 +49,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="tables"
         options={{
-          title: "Tables",
+          title: "Rooms",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "grid" : "grid-outline"}
+              name={focused ? "game-controller" : "game-controller-outline"}
               size={20}
               color={color}
             />

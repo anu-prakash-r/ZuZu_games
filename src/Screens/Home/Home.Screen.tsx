@@ -121,7 +121,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <View className="px-5 pt-4 pb-3 bg-white border-b border-slate-100 shadow-sm">
+      <View className="px-5 pt-4 pb-3 border-b border-slate-200">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center space-x-3">
             <View className="w-11 h-11 rounded-2xl bg-[#35116B] items-center justify-center shadow-md shadow-[#35116B]/30">
@@ -146,11 +146,11 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1 pt-6"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         <View className="px-5">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
-            Table Status
+            Room Status
           </Text>
 
           <View className="flex-row gap-3 mb-4">
@@ -215,7 +215,7 @@ export default function HomeScreen() {
                 </View>
                 <View className="flex-1">
                   <Text className="text-emerald-900 font-bold text-base">
-                    Add More Tables
+                    Add More Rooms
                   </Text>
 
                   <Text
@@ -232,7 +232,7 @@ export default function HomeScreen() {
 
           <View className="flex-row items-center justify-between mb-2 px-1">
             <Text className="text-slate-500 text-base font-extrabold tracking-tight">
-              Active Table Sessions
+              Active Room Sessions
             </Text>
 
             <TouchableOpacity
@@ -250,28 +250,29 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingVertical: 8,
-          }}
-          className="gap-3"
-        >
+        <View className="px-4 py-3 gap-4">
           {ACTIVE_TABLES.map((item) => (
             <View
               key={item.id}
-              className="w-56 h-52 bg-white border border-slate-200/80 p-4 rounded-3xl justify-between shadow-md shadow-slate-200/40 border-t-4 border-t-[#35116B] mr-3"
+              className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xl shadow-slate-200/50"
             >
-              <View className="flex-row items-center justify-between">
-                <View className="bg-purple-100 w-12 h-12 rounded-xl flex-row items-center justify-center">
-                  <Text className="text-slate-900 font-black text-2xl tracking-tight">
-                    {item.tableNo}
-                  </Text>
+              <View className="flex-row items-center justify-between mb-4">
+                <View className="flex-row items-center gap-3">
+                  <View className="w-12 h-12 rounded-2xl bg-purple-50 items-center justify-center border border-purple-100">
+                    <Ionicons
+                      name="game-controller"
+                      size={20}
+                      color="#35116B"
+                    />
+                  </View>
+                  <View>
+                    <Text className="text-slate-900 text-lg font-black tracking-tight mt-0.5">
+                      Room {item.tableNo}
+                    </Text>
+                  </View>
                 </View>
 
-                <View className="flex-row items-center gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded-full border border-amber-200/80">
+                <View className="flex-row items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200/80">
                   <Ionicons name="time-outline" size={13} color="#D97706" />
                   <Text className="text-amber-800 font-bold text-xs">
                     {item.time}
@@ -279,56 +280,51 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View className="gap-3">
-                <View className="flex-row items-center gap-2">
-                  <View className="w-8 h-8 rounded-xl bg-purple-50 items-center justify-center">
+              <View className="h-[1px] bg-slate-100 mb-4" />
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="w-9 h-9 rounded-xl bg-slate-50 items-center justify-center border border-slate-200/60">
                     <Ionicons
                       name="receipt-outline"
                       size={16}
-                      color="#35116B"
+                      color="#64748B"
                     />
                   </View>
-
-                  <View className="flex-1">
-                    <Text className="text-slate-700 text-sm font-bold">
-                      {item.items} items
+                  <View>
+                    <Text className="text-slate-400 text-[10px] font-bold uppercase">
+                      Order Items
                     </Text>
-                    <Text className="text-slate-400 text-xs mt-0.5">
-                      Ordered items
+                    <Text className="text-slate-800 text-xs font-extrabold mt-0.5">
+                      {item.items} Items Ordered
                     </Text>
                   </View>
                 </View>
-              </View>
 
-              <View className="pt-3 border-t border-slate-100 flex-row items-center justify-between">
-                <View className="gap-1">
-                  <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                    Total Bill
+                <View className="items-end">
+                  <Text className="text-slate-400 text-[10px] font-bold uppercase">
+                    Total
                   </Text>
-
-                  <Text
-                    className="text-[#35116B] font-black text-xl tracking-tight"
-                    numberOfLines={1}
-                  >
+                  <Text className="text-[#35116B] text-lg font-black tracking-tight mt-0.5">
                     {item.price}
                   </Text>
                 </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    router.push("/orders");
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View order for table ${item.tableNo}`}
-                  className="w-10 h-10 rounded-2xl bg-[#35116B] items-center justify-center shadow-md shadow-purple-900/20"
-                >
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
               </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  router.push("/orders");
+                }}
+                className="mt-4 bg-[#35116B] rounded-2xl py-3.5 flex-row items-center justify-center gap-2 shadow-md shadow-purple-900/20"
+              >
+                <Text className="text-white font-bold text-xs tracking-wide">
+                  View Order & KOT
+                </Text>
+                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
           ))}
-        </ScrollView>
+        </View>
       </ScrollView>
 
       <Modal
@@ -356,10 +352,10 @@ export default function HomeScreen() {
                   </View>
                   <View>
                     <Text className="text-white text-lg font-black tracking-tight">
-                      Add New Table
+                      Create New Room
                     </Text>
                     <Text className="text-purple-200/90 text-xs font-medium mt-0.5">
-                      Configure table details for your cafe floor
+                      Configure Room details for your cafe
                     </Text>
                   </View>
                 </View>
@@ -377,7 +373,7 @@ export default function HomeScreen() {
             <View className="p-6">
               <View className="mb-4">
                 <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-2">
-                  Table Number
+                  Room Number
                 </Text>
                 <View className="flex-row items-center border border-slate-200/80 rounded-2xl px-4 h-14 bg-slate-50/50">
                   <Ionicons name="pricetag-outline" size={18} color="#35116B" />
@@ -489,7 +485,7 @@ export default function HomeScreen() {
                 >
                   <Ionicons name="add-circle" size={19} color="#FFFFFF" />
                   <Text className="text-white font-bold text-sm tracking-wide">
-                    Create Table
+                    Create Room
                   </Text>
                 </TouchableOpacity>
               </View>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   StatusBar,
   useWindowDimensions,
   Alert,
+  LayoutAnimation,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,18 +35,54 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [focusedInput, setFocusedInput] = useState<"email" | "password" | null>(
     null,
   );
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const isSmallScreen = height < 700;
   const isWideScreen = width >= 600;
 
+  useEffect(() => {
+    const animateLayout = () => {
+      LayoutAnimation.configureNext({
+        duration: 300,
+        create: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+        update: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+        },
+        delete: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+      });
+    };
+
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      animateLayout();
+      setIsKeyboardVisible(true);
+    });
+
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      animateLayout();
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   const handleLogin = () => {
     if (!email.trim()) {
       Alert.alert("Required", "Please enter your email address.");
-      return;
-    }
-
-    if (!/\S+@\S+\.\S+/.test(email.trim())) {
-      Alert.alert("Invalid Email", "Please enter a valid email address.");
       return;
     }
 
@@ -66,32 +103,46 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <KeyboardAvoidingView
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
         >
           <ScrollView
             className="flex-1"
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={
+              Platform.OS === "ios" ? "interactive" : "on-drag"
+            }
             showsVerticalScrollIndicator={false}
+            bounces={false}
           >
             <View
+              className="items-center justify-center px-6"
               style={{
-                height: isSmallScreen ? 180 : 240,
+                height: isKeyboardVisible ? 80 : isSmallScreen ? 180 : 240,
+                paddingTop: isKeyboardVisible ? 0 : 16,
               }}
-              className="items-center justify-center px-6 pt-4"
             >
               <Image
                 source={require("@/assets/images/SaraS-Web-Solution.png")}
                 style={{
                   width: isWideScreen ? 280 : 240,
-                  height: 80,
+                  height: isKeyboardVisible ? 55 : 80,
                 }}
                 contentFit="contain"
               />
             </View>
 
             <View
-              className="flex-1 bg-[#35116B] rounded-t-[40px] px-6 pt-8 justify-between shadow-2xl"
-              style={{ paddingBottom: Math.max(insets.bottom, 32) }}
+              className="flex-1 bg-[#35116B] rounded-t-[40px] px-6 shadow-2xl"
+              style={{
+                paddingTop: isKeyboardVisible ? 20 : 32,
+                paddingBottom: isKeyboardVisible
+                  ? 20
+                  : Math.max(insets.bottom, 32),
+                justifyContent: isKeyboardVisible
+                  ? "flex-start"
+                  : "space-between",
+              }}
             >
               <View>
                 <View className="mb-7">
@@ -233,54 +284,60 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 </TouchableOpacity>
               </View>
 
-              <View className="pt-2">
-                <View className="flex-row justify-around items-center bg-white/10 rounded-2xl p-3.5 mb-5 border border-white/10">
-                  <View className="items-center flex-1">
-                    <Ionicons
-                      name="shield-checkmark-sharp"
-                      size={20}
-                      color="#38BDF8"
-                    />
-                    <Text className="text-white font-semibold text-[10px] mt-1 text-center">
-                      256-bit Encryption
-                    </Text>
+              {!isKeyboardVisible && (
+                <View className="pt-2">
+                  <View className="flex-row justify-around items-center bg-white/10 rounded-2xl p-3.5 mb-5 border border-white/10">
+                    <View className="items-center flex-1">
+                      <Ionicons
+                        name="shield-checkmark-sharp"
+                        size={20}
+                        color="#38BDF8"
+                      />
+                      <Text className="text-white font-semibold text-[10px] mt-1 text-center">
+                        256-bit Encryption
+                      </Text>
+                    </View>
+
+                    <View className="w-[1px] h-6 bg-white/20" />
+
+                    <View className="items-center flex-1">
+                      <Ionicons
+                        name="cloud-done-sharp"
+                        size={20}
+                        color="#34D399"
+                      />
+                      <Text className="text-white font-semibold text-[10px] mt-1 text-center">
+                        Cloud Sync
+                      </Text>
+                    </View>
+
+                    <View className="w-[1px] h-6 bg-white/20" />
+
+                    <View className="items-center flex-1">
+                      <Ionicons
+                        name="headset-sharp"
+                        size={20}
+                        color="#F472B6"
+                      />
+                      <Text className="text-white font-semibold text-[10px] mt-1 text-center">
+                        24/7 Support
+                      </Text>
+                    </View>
                   </View>
 
-                  <View className="w-[1px] h-6 bg-white/20" />
-
-                  <View className="items-center flex-1">
-                    <Ionicons
-                      name="cloud-done-sharp"
-                      size={20}
-                      color="#34D399"
-                    />
-                    <Text className="text-white font-semibold text-[10px] mt-1 text-center">
-                      Cloud Sync
-                    </Text>
-                  </View>
-
-                  <View className="w-[1px] h-6 bg-white/20" />
-
-                  <View className="items-center flex-1">
-                    <Ionicons name="headset-sharp" size={20} color="#F472B6" />
-                    <Text className="text-white font-semibold text-[10px] mt-1 text-center">
-                      24/7 Support
+                  <View className="items-center justify-center">
+                    <View className="flex-row items-center mb-1">
+                      <View className="w-2 h-2 rounded-full bg-emerald-400 mr-2" />
+                      <Text className="text-purple-200/90 text-xs font-medium">
+                        All Systems Operational
+                      </Text>
+                    </View>
+                    <Text className="text-purple-300/50 text-[10px] font-semibold tracking-wider uppercase">
+                      SaraS Web Solutions
                     </Text>
                   </View>
                 </View>
-
-                <View className="items-center justify-center">
-                  <View className="flex-row items-center mb-1">
-                    <View className="w-2 h-2 rounded-full bg-emerald-400 mr-2" />
-                    <Text className="text-purple-200/90 text-xs font-medium">
-                      All Systems Operational
-                    </Text>
-                  </View>
-                  <Text className="text-purple-300/50 text-[10px] font-semibold tracking-wider uppercase">
-                    SaraS Web Solutions
-                  </Text>
-                </View>
-              </View>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

@@ -153,7 +153,7 @@ export default function TablesScreen() {
 
           <View>
             <Text className="text-[#35116B] text-xl font-extrabold tracking-tight">
-              Tables
+              Rooms
             </Text>
           </View>
         </View>
@@ -166,7 +166,7 @@ export default function TablesScreen() {
       >
         <View className="flex-row items-center justify-between mb-4">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-            All Tables ({tables.length})
+            All Rooms ({tables.length})
           </Text>
           <View className="flex-row items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             <View className="w-2 h-2 rounded-full bg-emerald-500" />

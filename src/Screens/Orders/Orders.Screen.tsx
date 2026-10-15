@@ -39,6 +39,43 @@ const INITIAL_ORDERS = [
     createdAt: Date.now() - 15 * 60 * 1000,
     itemsList: [{ name: "PS5 Hour Pass", qty: 1, price: 200 }],
   },
+  {
+    id: "#1044",
+    table: "T1",
+    createdAt: Date.now() - 5 * 60 * 1000,
+    itemsList: [
+      { name: "Chicken Biryani", qty: 2, price: 220 },
+      { name: "Coke (Can)", qty: 2, price: 50 },
+    ],
+  },
+  {
+    id: "#1045",
+    table: "T3",
+    createdAt: Date.now() - 50 * 60 * 1000,
+    itemsList: [
+      { name: "White Sauce Pasta", qty: 1, price: 240 },
+      { name: "Garlic Bread", qty: 1, price: 130 },
+      { name: "Virgin Mojito", qty: 2, price: 140 },
+    ],
+  },
+  {
+    id: "#1046",
+    table: "Takeaway",
+    createdAt: Date.now() - 10 * 60 * 1000,
+    itemsList: [
+      { name: "Paneer Tikka Roll", qty: 3, price: 160 },
+      { name: "Masala Chai", qty: 2, price: 40 },
+    ],
+  },
+  {
+    id: "#1047",
+    table: "T6",
+    createdAt: Date.now() - 120 * 60 * 1000,
+    itemsList: [
+      { name: "VR Gaming 30Mins", qty: 2, price: 250 },
+      { name: "Red Bull", qty: 2, price: 125 },
+    ],
+  },
 ];
 
 const MENU_ITEMS = [
@@ -131,7 +168,7 @@ export default function OrdersScreen() {
   const handleDeleteOrder = (orderId: string) => {
     Alert.alert(
       "Delete Order",
-      "Are you sure you want to delete this order and close the table session?",
+      "Are you sure you want to delete this order and close the Room session?",
       [
         {
           text: "Cancel",
@@ -186,7 +223,7 @@ export default function OrdersScreen() {
       <ScrollView
         className="flex-1 px-5 pt-5"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 150 }}
       >
         <View className="flex-row items-center justify-between mb-4">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
@@ -217,7 +254,7 @@ export default function OrdersScreen() {
                     </View>
                     <View>
                       <Text className="text-slate-900 font-extrabold text-base">
-                        Table {order.table}
+                        Room {order.table}
                       </Text>
                       <Text className="text-slate-400 text-xs font-medium">
                         Order ID: {order.id}
@@ -316,7 +353,7 @@ export default function OrdersScreen() {
           >
             <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <Text className="text-xl font-extrabold text-[#35116B]">
-                Edit Order — Table {activeOrder?.table}
+                Edit Order — Room {activeOrder?.table}
               </Text>
               <TouchableOpacity
                 onPress={() => setIsModalOpen(false)}
@@ -428,7 +465,7 @@ export default function OrdersScreen() {
                 Invoice & Bill Summary
               </Text>
               <Text className="text-slate-400 text-xs">
-                Table {billingOrder?.table} · Order {billingOrder?.id}
+                Room {billingOrder?.table} · Order {billingOrder?.id}
               </Text>
             </View>
 
