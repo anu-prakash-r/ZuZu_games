@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
+import AntDesign from "@expo/vector-icons/AntDesign";
 import { productPrice } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
@@ -142,6 +142,12 @@ export default function TablesScreen() {
 
   const filteredProducts = products.filter((p) =>
     p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
+  );
+
+  const visibleProducts = [...filteredProducts].sort(
+    (a, b) =>
+      Number((quantities[b.product_id] ?? 0) > 0) -
+      Number((quantities[a.product_id] ?? 0) > 0),
   );
 
   const totalItems = Object.values(quantities).reduce((s, q) => s + q, 0);
@@ -406,7 +412,7 @@ export default function TablesScreen() {
       >
         <View className="flex-1 justify-end bg-black/60">
           <View className="bg-white rounded-t-[32px] p-6 border-t border-slate-100 h-[85%] justify-between">
-            <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <View className="flex-row items-center justify-between mb-2 pb-1">
               <View>
                 <Text className="text-xl font-extrabold text-[#35116B]">
                   {selectedIsOccupied
@@ -423,40 +429,47 @@ export default function TablesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <View className="mb-3">
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-slate-700 font-bold text-xs uppercase">
+                  Select Items
+                </Text>
+                {totalItems > 0 && (
+                  <View className="bg-[#35116B] px-2.5 py-1 rounded-full">
+                    <Text className="text-white text-[11px] font-bold">
+                      {totalItems} selected
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4">
+                <Ionicons name="search-outline" size={17} color="#94A3B8" />
+                <TextInput
+                  placeholder="Search menu..."
+                  placeholderTextColor="#94A3B8"
+                  value={menuSearch}
+                  onChangeText={setMenuSearch}
+                  className="flex-1 ml-2 py-3 text-slate-900 text-sm font-medium"
+                />
+                {menuSearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setMenuSearch("")}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
               <View className="mb-5">
-                <View className="flex-row items-center justify-between mb-2">
-                  <Text className="text-slate-700 font-bold text-xs uppercase">
-                    Select Items
-                  </Text>
-                  {totalItems > 0 && (
-                    <View className="bg-[#35116B] px-2.5 py-1 rounded-full">
-                      <Text className="text-white text-[11px] font-bold">
-                        {totalItems} selected
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 mb-2.5">
-                  <Ionicons name="search-outline" size={17} color="#94A3B8" />
-                  <TextInput
-                    placeholder="Search menu..."
-                    placeholderTextColor="#94A3B8"
-                    value={menuSearch}
-                    onChangeText={setMenuSearch}
-                    className="flex-1 ml-2 py-3 text-slate-900 text-sm font-medium"
-                  />
-                  {menuSearch.length > 0 && (
-                    <TouchableOpacity
-                      onPress={() => setMenuSearch("")}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
                 {productsLoading ? (
                   <View className="mt-4">
                     {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -496,7 +509,7 @@ export default function TablesScreen() {
                   </View>
                 ) : (
                   <View className="gap-2">
-                    {filteredProducts.map((item) => {
+                    {visibleProducts.map((item) => {
                       const qty = quantities[item.product_id] ?? 0;
                       const isSelected = qty > 0;
                       return (
@@ -584,27 +597,37 @@ export default function TablesScreen() {
             </ScrollView>
 
             {totalItems > 0 ? (
-              <View className="pt-2 border-t mb-3 border-slate-100 flex-row items-center justify-between">
-                <View>
-                  <Text className="text-slate-400 text-[10px] font-bold uppercase">
-                    {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
-                  </Text>
-                  <Text className="text-[#35116B] font-black text-2xl">
-                    ₹{calculateTotal()}
-                  </Text>
-                </View>
-
+              <View className="pt-3 border-t mb-3 border-slate-100 flex-row items-center justify-between">
                 <TouchableOpacity
-                  onPress={handleConfirmBooking}
-                  activeOpacity={0.85}
-                  disabled={totalItems === 0}
-                  className="bg-emerald-500 px-6 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                  onPress={() => setIsModalOpen(false)}
+                  activeOpacity={0.7}
+                  className="bg-red-500 px-5 py-3.5 rounded-2xl shadow-lg shadow-red-500/20 items-center justify-center"
                 >
-                  <Text className="text-white font-bold text-sm">
-                    Print KOT
-                  </Text>
-                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                  <Text className="text-white font-bold text-sm">Cancel</Text>
                 </TouchableOpacity>
+
+                <View className="flex-row items-center gap-3">
+                  <View className="items-end">
+                    <Text className="text-slate-400 text-[10px] font-bold uppercase">
+                      {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
+                    </Text>
+                    <Text className="text-[#35116B] font-black text-xl">
+                      ₹{calculateTotal()}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={handleConfirmBooking}
+                    activeOpacity={0.85}
+                    disabled={totalItems === 0}
+                    className="bg-emerald-500 px-5 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                  >
+                    <Text className="text-white font-bold text-sm">
+                      Print KOT
+                    </Text>
+                    <AntDesign name="printer" size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : null}
           </View>
