@@ -332,7 +332,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                         All Systems Operational
                       </Text>
                     </View>
-                    <Text className="text-purple-300/50 text-[10px] font-semibold tracking-wider uppercase">
+                    <Text className="text-purple-300/50 text-[10px] font-semibold tracking-wider">
                       SaraS Web Solutions
                     </Text>
                   </View>

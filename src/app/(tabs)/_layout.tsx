@@ -27,8 +27,7 @@ export default function TabsLayout() {
           position: "absolute",
         },
         tabBarLabelStyle: {
-          fontSize: 10.5,
-          fontWeight: "700",
+          fontSize: 12,
         },
       }}
     >
@@ -39,7 +38,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
-              size={20}
+              size={24}
               color={color}
             />
           ),
@@ -53,7 +52,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "game-controller" : "game-controller-outline"}
-              size={20}
+              size={24}
               color={color}
             />
           ),
@@ -67,7 +66,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "receipt" : "receipt-outline"}
-              size={20}
+              size={24}
               color={color}
             />
           ),
@@ -81,7 +80,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "settings" : "settings-outline"}
-              size={20}
+              size={24}
               color={color}
             />
           ),
