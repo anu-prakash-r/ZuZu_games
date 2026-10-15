@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { productPrice } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
+import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
+import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
 import { useProducts } from "@/hooks/useProducts";
 import { useAuth } from "@/context/AuthContext";
 
@@ -55,12 +56,10 @@ export default function TablesScreen() {
       setTablesError(null);
       try {
         const data = await fetchTables(token);
-        console.log("[tables]", data);
         setApiTables(data);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "Failed to load tables.";
-        console.log("[tables] failed:", message);
         setTablesError(message);
       } finally {
         setIsLoadingTables(false);
@@ -106,6 +105,8 @@ export default function TablesScreen() {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailTable, setDetailTable] = useState<ApiTable | null>(null);
   const [selectedTable, setSelectedTable] = useState<ApiTable | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [quantities, setQuantities] = useState<Record<number, number>>({});
@@ -172,6 +173,20 @@ export default function TablesScreen() {
   const occupiedTables = apiTables.filter((t) => !isTableFree(t));
   const selectedIsOccupied = !!selectedTable && !isTableFree(selectedTable);
 
+  const detailExtraCount =
+    detailTable?.booking?.extra_head_count ??
+    detailTable?.booking?.extra_persons?.length ??
+    0;
+  const detailGuestCount =
+    detailTable?.booking?.head_count ??
+    Math.max(
+      0,
+      (detailTable?.booking?.total_head_count ?? 0) - detailExtraCount,
+    );
+  const detailTotalCount =
+    detailTable?.booking?.total_head_count ??
+    detailGuestCount + detailExtraCount;
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-slate-200">
@@ -216,14 +231,13 @@ export default function TablesScreen() {
           </Text>
         </View>
 
-        {isLoadingTables && apiTables.length === 0 ? (
-          <View className="items-center py-16 gap-2">
-            <ActivityIndicator size="large" color={BRAND} />
-            <Text className="text-slate-400 text-xs font-semibold">
-              Loading rooms...
-            </Text>
+        {isLoadingTables ? (
+          <View className="flex-row flex-wrap justify-between gap-y-4">
+            {[0, 1, 2, 3].map((i) => (
+              <TableCardSkeleton key={i} />
+            ))}
           </View>
-        ) : tablesError && apiTables.length === 0 ? (
+        ) : tablesError ? (
           <View className="items-center py-10 px-4 bg-red-50 border border-red-200/60 rounded-3xl gap-2">
             <Ionicons name="cloud-offline-outline" size={28} color="#DC2626" />
             <Text className="text-red-700 text-xs font-semibold text-center">
@@ -257,59 +271,77 @@ export default function TablesScreen() {
               const override = localBookings[table.id];
               const liveTime = getElapsedTime(getTableBookedAt(table));
               const guestName = table.booking?.contact_name?.trim() || "Guest";
-              const guestCount =
-                table.booking?.total_head_count ??
-                table.booking?.head_count ??
+              const extraCount =
+                table.booking?.extra_head_count ??
+                table.booking?.extra_persons?.length ??
                 0;
+              const guestCount =
+                table.booking?.head_count ??
+                Math.max(
+                  0,
+                  (table.booking?.total_head_count ?? 0) - extraCount,
+                );
+              const totalCount =
+                table.booking?.total_head_count ?? guestCount + extraCount;
 
               return (
-                <Pressable
+                <View
                   key={table.id}
-                  onPress={() => handleTablePress(table)}
-                  className="w-[48%] h-52 p-4 rounded-3xl justify-between border shadow-sm transition-all active:scale-95 bg-[#35116B] border-[#35116B] shadow-purple-900/20"
+                  className="w-[48%] h-60 px-3 py-4 rounded-3xl justify-between border shadow-sm bg-[#35116B] border-[#35116B] shadow-purple-900/20"
                 >
-                  <View className="flex-row items-center justify-between">
-                    <View className="px-3 py-1 rounded-xl flex-row items-center gap-1 bg-white/10 border border-white/20">
-                      <Ionicons name="restaurant" size={12} color="#FFFFFF" />
-                      <Text
-                        className="font-black text-sm text-white"
-                        numberOfLines={1}
-                      >
-                        {table.name}
-                      </Text>
-                    </View>
-
-                    <View className="flex-row items-center gap-1 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-400/30">
-                      <Ionicons name="time-outline" size={11} color="#FBBF24" />
-                      <Text className="text-amber-300 font-bold text-[11px]">
-                        {liveTime}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View className="my-1">
-                    {override ? (
-                      <View>
-                        <View className="flex-row items-center gap-1.5 mb-1">
-                          <Ionicons
-                            name="fast-food-outline"
-                            size={14}
-                            color="#D8B4FE"
-                          />
-                          <Text className="text-purple-200 text-xs font-bold">
-                            {override.itemsCount}
-                          </Text>
-                        </View>
-                        <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
-                          Total Amount
-                        </Text>
-                        <Text className="text-white font-black text-2xl tracking-tight">
-                          {override.price}
+                  <Pressable
+                    className="flex-1"
+                    onPress={() => {
+                      setDetailTable(table);
+                      setIsDetailOpen(true);
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="px-3 py-1 rounded-xl flex-row items-center gap-1 bg-white/10 border border-white/20">
+                        <Text
+                          className="font-black text-sm text-white"
+                          numberOfLines={1}
+                        >
+                          {table.name}
                         </Text>
                       </View>
-                    ) : (
+
+                      <View className="flex-row items-center gap-1 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-400/30">
+                        <Ionicons
+                          name="time-outline"
+                          size={11}
+                          color="#FBBF24"
+                        />
+                        <Text className="text-amber-300 font-bold text-[11px]">
+                          {liveTime}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="my-1">
+                      {override ? (
+                        <View>
+                          <View className="flex-row items-center gap-1.5 mb-1">
+                            <Ionicons
+                              name="fast-food-outline"
+                              size={14}
+                              color="#D8B4FE"
+                            />
+                            <Text className="text-purple-200 text-xs font-bold">
+                              {override.itemsCount}
+                            </Text>
+                          </View>
+                          <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
+                            Total Amount
+                          </Text>
+                          <Text className="text-white font-black text-2xl tracking-tight">
+                            {override.price}
+                          </Text>
+                        </View>
+                      ) : null}
+
                       <View>
-                        <View className="flex-row items-center gap-1.5 mb-1">
+                        <View className="flex-row items-center gap-1.5 mb-1 mt-2">
                           <Ionicons
                             name="person-outline"
                             size={14}
@@ -322,30 +354,44 @@ export default function TablesScreen() {
                             {guestName}
                           </Text>
                         </View>
-                        <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
+                        <Text className="text-purple-300 mt-2 text-[10px] font-semibold uppercase tracking-wider">
                           Guests
                         </Text>
                         <Text className="text-white font-black text-2xl tracking-tight">
                           {guestCount}
+                          {extraCount > 0 && (
+                            <Text className="text-purple-200 text-sm font-bold">
+                              {"  "}+{extraCount} Extra Person
+                              {extraCount === 1 ? "" : "s"}
+                            </Text>
+                          )}
                         </Text>
+                        {extraCount > 0 && (
+                          <Text className="text-white mt-2 text-[13px] font-bold">
+                            Total: {totalCount} Person
+                            {totalCount === 1 ? "" : "s"}
+                          </Text>
+                        )}
                       </View>
-                    )}
-                  </View>
-
-                  <View className="pt-2 border-t flex-row items-center justify-between border-white/10">
-                    <Text className="text-[11px] font-bold text-purple-300">
-                      Add Items
-                    </Text>
-
-                    <View className="w-7 h-7 rounded-xl items-center justify-center bg-white">
-                      <Ionicons
-                        name="arrow-forward"
-                        size={14}
-                        color="#35116B"
-                      />
                     </View>
-                  </View>
-                </Pressable>
+                  </Pressable>
+
+                  <Pressable onPress={() => handleTablePress(table)}>
+                    <View className="pt-2 border-t flex-row items-center justify-between border-white/10">
+                      <Text className="text-[11px] font-bold text-purple-300">
+                        Add Items
+                      </Text>
+
+                      <View className="w-7 h-7 rounded-xl items-center justify-center bg-white">
+                        <Ionicons
+                          name="arrow-forward"
+                          size={14}
+                          color="#35116B"
+                        />
+                      </View>
+                    </View>
+                  </Pressable>
+                </View>
               );
             })}
           </View>
@@ -359,12 +405,9 @@ export default function TablesScreen() {
         onRequestClose={() => setIsModalOpen(false)}
       >
         <View className="flex-1 justify-end bg-black/60">
-          <View className="bg-white rounded-t-[32px] p-6 border-t border-slate-100 max-h-[85%]">
+          <View className="bg-white rounded-t-[32px] p-6 border-t border-slate-100 h-[85%] justify-between">
             <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <View>
-                <Text className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                  {selectedIsOccupied ? "Running Order" : "New Reservation"}
-                </Text>
                 <Text className="text-xl font-extrabold text-[#35116B]">
                   {selectedIsOccupied
                     ? `Add Items — ${selectedTable?.name}`
@@ -384,7 +427,7 @@ export default function TablesScreen() {
               <View className="mb-5">
                 <View className="flex-row items-center justify-between mb-2">
                   <Text className="text-slate-700 font-bold text-xs uppercase">
-                    Select Items / Orders
+                    Select Items
                   </Text>
                   {totalItems > 0 && (
                     <View className="bg-[#35116B] px-2.5 py-1 rounded-full">
@@ -415,11 +458,10 @@ export default function TablesScreen() {
                 </View>
 
                 {productsLoading ? (
-                  <View className="items-center py-8 gap-2">
-                    <ActivityIndicator size="large" color={BRAND} />
-                    <Text className="text-slate-400 text-xs font-semibold">
-                      Loading menu...
-                    </Text>
+                  <View className="mt-4">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <ProductItemSkeleton key={i} />
+                    ))}
                   </View>
                 ) : productsError ? (
                   <View className="items-center py-6 px-4 bg-red-50 border border-red-200/60 rounded-2xl gap-2">
@@ -428,9 +470,7 @@ export default function TablesScreen() {
                       size={26}
                       color="#DC2626"
                     />
-                    <Text className="text-red-700 text-xs font-semibold text-center">
-                      {productsError}
-                    </Text>
+
                     <TouchableOpacity
                       onPress={refetchProducts}
                       activeOpacity={0.8}
@@ -543,30 +583,155 @@ export default function TablesScreen() {
               </View>
             </ScrollView>
 
-            <View className="pt-2 border-t mb-3 border-slate-100 flex-row items-center justify-between">
-              <View>
-                <Text className="text-slate-400 text-[10px] font-bold uppercase">
-                  {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
-                </Text>
-                <Text className="text-[#35116B] font-black text-2xl">
-                  ₹{calculateTotal()}
-                </Text>
-              </View>
+            {totalItems > 0 ? (
+              <View className="pt-2 border-t mb-3 border-slate-100 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-slate-400 text-[10px] font-bold uppercase">
+                    {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
+                  </Text>
+                  <Text className="text-[#35116B] font-black text-2xl">
+                    ₹{calculateTotal()}
+                  </Text>
+                </View>
 
-              <TouchableOpacity
-                onPress={handleConfirmBooking}
-                activeOpacity={0.85}
-                disabled={totalItems === 0}
-                className="bg-emerald-500 px-6 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-              >
-                <Text className="text-white font-bold text-sm">
-                  Confirm Booking
-                </Text>
-                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  onPress={handleConfirmBooking}
+                  activeOpacity={0.85}
+                  disabled={totalItems === 0}
+                  className="bg-emerald-500 px-6 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                >
+                  <Text className="text-white font-bold text-sm">
+                    Print KOT
+                  </Text>
+                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={isDetailOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDetailOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-center items-center bg-black/60 px-5"
+          onPress={() => setIsDetailOpen(false)}
+        >
+          <Pressable
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl"
+            onPress={(e) => e.stopPropagation()}
+          >
+            {detailTable && (
+              <>
+                <View className="items-center mb-4">
+                  <View className="w-14 h-14 rounded-2xl bg-[#35116B] items-center justify-center mb-2">
+                    <Ionicons
+                      name="game-controller"
+                      size={26}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text className="text-xl font-black text-[#35116B]">
+                    {detailTable.name}
+                  </Text>
+                  <View className="flex-row items-center gap-1.5 mt-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    <View className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <Text className="text-emerald-700 text-[11px] font-bold uppercase">
+                      {(detailTable.booking?.status ?? "occupied").replace(
+                        "_",
+                        " ",
+                      )}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="py-3 border-t border-b border-slate-100 mb-4 gap-2.5">
+                  <View className="flex-row justify-between">
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      Contact
+                    </Text>
+                    <Text className="text-slate-900 font-bold text-sm">
+                      {detailTable.booking?.contact_name?.trim() || "Guest"}
+                    </Text>
+                  </View>
+                  {!!detailTable.booking?.contact_mobile && (
+                    <View className="flex-row justify-between">
+                      <Text className="text-slate-400 text-xs font-semibold">
+                        Mobile
+                      </Text>
+                      <Text className="text-slate-900 font-bold text-sm">
+                        {detailTable.booking.contact_mobile}
+                      </Text>
+                    </View>
+                  )}
+                  <View className="flex-row justify-between">
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      Guests
+                    </Text>
+                    <Text className="text-slate-900 font-bold text-sm">
+                      {detailGuestCount}
+                    </Text>
+                  </View>
+                  {detailExtraCount > 0 && (
+                    <View className="flex-row justify-between">
+                      <Text className="text-slate-400 text-xs font-semibold">
+                        Extra Persons
+                      </Text>
+                      <Text className="text-slate-900 font-bold text-sm">
+                        +{detailExtraCount}
+                      </Text>
+                    </View>
+                  )}
+                  <View className="flex-row justify-between">
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      Total Persons
+                    </Text>
+                    <Text className="text-slate-900 font-bold text-sm">
+                      {detailTotalCount}
+                    </Text>
+                  </View>
+                  <View className="flex-row justify-between">
+                    <Text className="text-slate-400 text-xs font-semibold">
+                      Elapsed
+                    </Text>
+                    <Text className="text-slate-900 font-bold text-sm">
+                      {getElapsedTime(getTableBookedAt(detailTable))}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="gap-2">
+                  <TouchableOpacity
+                    onPress={() => {
+                      const t = detailTable;
+                      setIsDetailOpen(false);
+                      if (t) handleTablePress(t);
+                    }}
+                    activeOpacity={0.85}
+                    className="bg-[#35116B] py-4 rounded-2xl items-center shadow-md shadow-purple-900/20"
+                  >
+                    <Text className="text-white font-bold text-base">
+                      Add Items
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setIsDetailOpen(false)}
+                    activeOpacity={0.8}
+                    className="py-3.5 items-center bg-slate-200 rounded-2xl"
+                  >
+                    <Text className="text-black font-semibold text-base">
+                      Close
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

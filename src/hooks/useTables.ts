@@ -23,7 +23,6 @@ export function useTables(enabled = true): UseTablesResult {
     setError(null);
     try {
       const data = await fetchTables(token);
-      console.log("[tables]", data);
       setTables(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load tables.");
