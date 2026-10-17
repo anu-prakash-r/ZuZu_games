@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SaraS Waiter App",
-    "slug": "Zuzu_games",
+    "slug": "zuzu-",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/fav.png",
@@ -47,7 +47,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6dab3835-134e-43f6-9284-0ab33f43092c"
+        "projectId": "ca725bf0-948e-4618-8b39-18f0c967c158"
       }
     }
   }

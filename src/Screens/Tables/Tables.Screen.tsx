@@ -1,29 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { storeKotOrder, type KotStorePayload } from "@/api/kot";
+import { productPrice } from "@/api/products";
+import { fetchTables, type ApiTable } from "@/api/tables";
+import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
+import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
+import { useAuth } from "@/context/AuthContext";
+import { useProducts } from "@/hooks/useProducts";
+import { printServerKot } from "@/utils/printer";
+import { Ionicons } from "@expo/vector-icons";
+import AntDesign from "@expo/vector-icons/AntDesign";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
-  View,
-  TouchableOpacity,
-  Modal,
   TextInput,
-  Alert,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import AntDesign from "@expo/vector-icons/AntDesign";
-import { productPrice } from "@/api/products";
-import { storeKotOrder, type KotStorePayload } from "@/api/kot";
-import { fetchTables, type ApiTable } from "@/api/tables";
-import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
-import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
-import { useProducts } from "@/hooks/useProducts";
-import { useAuth } from "@/context/AuthContext";
-import { printServerKot } from "@/utils/printer";
 
 const BRAND = "#35116B";
+
+const NOTE_CHIPS = [
+  "No Onion",
+  "Less Oil",
+  "Less Spicy",
+  "No Spice",
+  "Extra Salt",
+  "No Garlic",
+  "Well Done",
+  "Take Away",
+];
 
 interface LocalBooking {
   itemsCount: string;
@@ -31,7 +41,6 @@ interface LocalBooking {
   bookedAt: number;
 }
 
-/** API sends "2026-10-15 14:32:02" — normalize so every engine parses it. */
 function parseApiDate(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value.replace(" ", "T"));
@@ -116,6 +125,9 @@ export default function TablesScreen() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [menuSearch, setMenuSearch] = useState("");
   const [isSubmittingKot, setIsSubmittingKot] = useState(false);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [expandedNotePid, setExpandedNotePid] = useState<number | null>(null);
+  const [itemNoteText, setItemNoteText] = useState<Record<number, string>>({});
 
   const {
     products,
@@ -129,6 +141,9 @@ export default function TablesScreen() {
     setCustomerName(table.booking?.contact_name?.trim() ?? "");
     setQuantities({});
     setMenuSearch("");
+    setItemNoteText({});
+    setExpandedNotePid(null);
+    setIsNoteModalOpen(false);
     setIsModalOpen(true);
   };
 
@@ -144,6 +159,44 @@ export default function TablesScreen() {
       return copy;
     });
   };
+
+  const toggleNoteChip = (productId: number, chip: string) => {
+    setItemNoteText((prev) => {
+      const current = (prev[productId] ?? "").trim();
+      const parts = current
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const exists = parts.some((p) => p.toLowerCase() === chip.toLowerCase());
+      const next = exists
+        ? parts.filter((p) => p.toLowerCase() !== chip.toLowerCase())
+        : [...parts, chip];
+      return { ...prev, [productId]: next.join(", ") };
+    });
+  };
+
+  const isChipActive = (productId: number, chip: string): boolean => {
+    const current = (itemNoteText[productId] ?? "").trim().toLowerCase();
+    if (!current) return false;
+    return current
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .some((p) => p === chip.toLowerCase());
+  };
+
+  const composeNote = (productId: number): string | null => {
+    const text = (itemNoteText[productId] ?? "").trim();
+    return text.length > 0 ? text : null;
+  };
+
+  const selectedProducts = products.filter(
+    (p) => (quantities[p.product_id] ?? 0) > 0,
+  );
+
+  const hasAnyNote = selectedProducts.some(
+    (p) => composeNote(p.product_id) !== null,
+  );
 
   const filteredProducts = products.filter((p) =>
     p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
@@ -193,7 +246,7 @@ export default function TablesScreen() {
             unit_price_inc_tax: price,
             item_tax: 0,
             tax_id: null,
-            sell_line_note: null,
+            sell_line_note: composeNote(p.product_id),
           };
         }),
     };
@@ -213,6 +266,8 @@ export default function TablesScreen() {
         },
       }));
 
+      setIsNoteModalOpen(false);
+      setExpandedNotePid(null);
       setIsModalOpen(false);
 
       if (response.print_kot && response.kot_printer && response.kot) {
@@ -675,7 +730,7 @@ export default function TablesScreen() {
                   </View>
 
                   <TouchableOpacity
-                    onPress={handleConfirmBooking}
+                    onPress={() => setIsNoteModalOpen(true)}
                     activeOpacity={0.85}
                     disabled={totalItems === 0 || isSubmittingKot}
                     className="bg-emerald-500 px-5 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
@@ -693,126 +748,241 @@ export default function TablesScreen() {
       </Modal>
 
       <Modal
-        visible={isDetailOpen}
+        visible={isNoteModalOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => setIsDetailOpen(false)}
+        onRequestClose={() => setIsNoteModalOpen(false)}
       >
-        <Pressable
-          className="flex-1 justify-center items-center bg-black/60 px-5"
-          onPress={() => setIsDetailOpen(false)}
-        >
-          <Pressable
-            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl"
-            onPress={(e) => e.stopPropagation()}
-          >
-            {detailTable && (
-              <>
-                <View className="items-center mb-4">
-                  <View className="w-14 h-14 rounded-2xl bg-[#35116B] items-center justify-center mb-2">
-                    <Ionicons
-                      name="game-controller"
-                      size={26}
-                      color="#FFFFFF"
-                    />
-                  </View>
-                  <Text className="text-xl font-black text-[#35116B]">
-                    {detailTable.name}
+        <View className="flex-1 justify-end bg-black/20">
+          <View className="bg-white rounded-t-[32px] p-6 border-t border-slate-100 h-[85%] justify-between">
+            <View className="flex-row items-center justify-between mb-2 pb-1">
+              <View>
+                <Text className="text-xl font-extrabold text-[#35116B]">
+                  Add Notes — {selectedTable?.name}
+                </Text>
+                <Text className="text-slate-400 text-xs font-semibold mt-0.5">
+                  Tap a food to add its note.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsNoteModalOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={{ flexGrow: 1, paddingVertical: 8 }}
+            >
+              {selectedProducts.length === 0 ? (
+                <View className="items-center py-10 gap-1.5">
+                  <Ionicons
+                    name="fast-food-outline"
+                    size={28}
+                    color="#CBD5E1"
+                  />
+                  <Text className="text-slate-400 text-xs font-semibold">
+                    No items selected.
                   </Text>
-                  <View className="flex-row items-center gap-1.5 mt-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                    <View className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <Text className="text-emerald-700 text-[11px] font-bold uppercase">
-                      {(detailTable.booking?.status ?? "occupied").replace(
-                        "_",
-                        " ",
-                      )}
-                    </Text>
-                  </View>
                 </View>
+              ) : (
+                <View className="gap-2.5">
+                  {selectedProducts.map((item) => {
+                    const pid = item.product_id;
+                    const qty = quantities[pid] ?? 0;
+                    const isExpanded = expandedNotePid === pid;
+                    const notePreview = composeNote(pid);
+                    const lineTotal = productPrice(item) * qty;
+                    return (
+                      <View
+                        key={pid}
+                        className={`rounded-2xl border bg-slate-50 overflow-hidden ${
+                          isExpanded
+                            ? "border-[#35116B]"
+                            : notePreview
+                              ? "border-purple-300"
+                              : "border-slate-200"
+                        }`}
+                      >
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() =>
+                            setExpandedNotePid(isExpanded ? null : pid)
+                          }
+                          className="flex-row items-center p-3.5"
+                        >
+                          <View
+                            className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${
+                              isExpanded || notePreview
+                                ? "bg-[#35116B]"
+                                : "bg-white border border-slate-200"
+                            }`}
+                          >
+                            <Ionicons
+                              name="fast-food"
+                              size={17}
+                              color={
+                                isExpanded || notePreview ? "#FFFFFF" : BRAND
+                              }
+                            />
+                          </View>
 
-                <View className="py-3 border-t border-b border-slate-100 mb-4 gap-2.5">
-                  <View className="flex-row justify-between">
-                    <Text className="text-slate-400 text-xs font-semibold">
-                      Contact
-                    </Text>
-                    <Text className="text-slate-900 font-bold text-sm">
-                      {detailTable.booking?.contact_name?.trim() || "Guest"}
-                    </Text>
-                  </View>
-                  {!!detailTable.booking?.contact_mobile && (
-                    <View className="flex-row justify-between">
-                      <Text className="text-slate-400 text-xs font-semibold">
-                        Mobile
-                      </Text>
-                      <Text className="text-slate-900 font-bold text-sm">
-                        {detailTable.booking.contact_mobile}
-                      </Text>
-                    </View>
-                  )}
-                  <View className="flex-row justify-between">
-                    <Text className="text-slate-400 text-xs font-semibold">
-                      Guests
-                    </Text>
-                    <Text className="text-slate-900 font-bold text-sm">
-                      {detailGuestCount}
-                    </Text>
-                  </View>
-                  {detailExtraCount > 0 && (
-                    <View className="flex-row justify-between">
-                      <Text className="text-slate-400 text-xs font-semibold">
-                        Extra Persons
-                      </Text>
-                      <Text className="text-slate-900 font-bold text-sm">
-                        +{detailExtraCount}
-                      </Text>
-                    </View>
-                  )}
-                  <View className="flex-row justify-between">
-                    <Text className="text-slate-400 text-xs font-semibold">
-                      Total Persons
-                    </Text>
-                    <Text className="text-slate-900 font-bold text-sm">
-                      {detailTotalCount}
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text className="text-slate-400 text-xs font-semibold">
-                      Elapsed
-                    </Text>
-                    <Text className="text-slate-900 font-bold text-sm">
-                      {getElapsedTime(getTableBookedAt(detailTable))}
-                    </Text>
-                  </View>
-                </View>
+                          <View className="flex-1 pr-2">
+                            <Text
+                              className="text-slate-900 font-extrabold text-sm"
+                              numberOfLines={1}
+                            >
+                              {item.product_name}
+                            </Text>
+                            <Text className="text-slate-400 text-[11px] font-semibold mt-0.5">
+                              {item.sku_no ? `${item.sku_no} · ` : ""}₹
+                              {productPrice(item)} × {qty} = ₹{lineTotal}
+                            </Text>
+                            {notePreview && !isExpanded ? (
+                              <Text
+                                className="text-[#35116B] text-[11px] font-bold mt-1"
+                                numberOfLines={1}
+                              >
+                                📝 {notePreview}
+                              </Text>
+                            ) : null}
+                          </View>
 
-                <View className="gap-2">
-                  <TouchableOpacity
-                    onPress={() => {
-                      const t = detailTable;
-                      setIsDetailOpen(false);
-                      if (t) handleTablePress(t);
-                    }}
-                    activeOpacity={0.85}
-                    className="bg-[#35116B] py-4 rounded-2xl items-center shadow-md shadow-purple-900/20"
-                  >
-                    <Text className="text-white font-bold text-base">
-                      Add Items
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setIsDetailOpen(false)}
-                    activeOpacity={0.8}
-                    className="py-3.5 items-center bg-slate-200 rounded-2xl"
-                  >
-                    <Text className="text-black font-semibold text-base">
-                      Close
-                    </Text>
-                  </TouchableOpacity>
+                          <View className="flex-row items-center gap-2">
+                            <View className="bg-[#35116B] px-2.5 py-1 rounded-lg">
+                              <Text className="text-white font-bold text-[11px]">
+                                {qty}x
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name={isExpanded ? "chevron-up" : "chevron-down"}
+                              size={18}
+                              color="#64748B"
+                            />
+                          </View>
+                        </TouchableOpacity>
+
+                        {isExpanded ? (
+                          <View className="px-3.5 pb-3.5 pt-0.5 border-t border-slate-200">
+                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mt-2.5 mb-2">
+                              Quick tags
+                            </Text>
+                            <View className="flex-row flex-wrap gap-2 mb-2.5">
+                              {NOTE_CHIPS.map((chip) => {
+                                const active = isChipActive(pid, chip);
+                                return (
+                                  <TouchableOpacity
+                                    key={chip}
+                                    onPress={() => toggleNoteChip(pid, chip)}
+                                    activeOpacity={0.8}
+                                    className={`px-3 py-1.5 rounded-full border ${
+                                      active
+                                        ? "bg-[#35116B] border-[#35116B]"
+                                        : "bg-white border-slate-200"
+                                    }`}
+                                  >
+                                    <Text
+                                      className={`text-[11px] font-bold ${
+                                        active ? "text-white" : "text-slate-600"
+                                      }`}
+                                    >
+                                      {chip}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+
+                            <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-2">
+                              Custom note
+                            </Text>
+                            <View className="flex-row items-center bg-white border border-slate-200 rounded-xl px-3">
+                              <Ionicons
+                                name="create-outline"
+                                size={16}
+                                color="#94A3B8"
+                              />
+                              <TextInput
+                                placeholder="e.g. extra crispy, less salt"
+                                placeholderTextColor="#94A3B8"
+                                value={itemNoteText[pid] ?? ""}
+                                onChangeText={(t) =>
+                                  setItemNoteText((prev) => ({
+                                    ...prev,
+                                    [pid]: t,
+                                  }))
+                                }
+                                className="flex-1 ml-2 py-2.5 text-slate-900 text-sm font-medium"
+                              />
+                              {(itemNoteText[pid]?.length ?? 0) > 0 ? (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    setItemNoteText((prev) => ({
+                                      ...prev,
+                                      [pid]: "",
+                                    }));
+                                  }}
+                                  activeOpacity={0.7}
+                                  className="ml-1"
+                                >
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={16}
+                                    color="#EF4444"
+                                  />
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
                 </View>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
+              )}
+            </ScrollView>
+
+            <View className="pt-3 border-t mb-1 border-slate-100 flex-row items-center justify-between">
+              <TouchableOpacity
+                onPress={() => setIsNoteModalOpen(false)}
+                activeOpacity={0.7}
+                className="bg-slate-200 px-5 py-3.5 rounded-2xl items-center justify-center"
+              >
+                <Text className="text-black font-bold text-sm">Back</Text>
+              </TouchableOpacity>
+
+              <View className="flex-row items-center gap-3">
+                {hasAnyNote ? (
+                  <View className="items-end">
+                    <Text className="text-slate-400 text-[10px] font-bold uppercase">
+                      {totalItems} Item{totalItems === 1 ? "" : "s"} · Total
+                    </Text>
+                    <Text className="text-[#35116B] font-black text-xl">
+                      ₹{calculateTotal()}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <TouchableOpacity
+                  onPress={handleConfirmBooking}
+                  activeOpacity={0.85}
+                  disabled={isSubmittingKot}
+                  className="bg-emerald-500 px-5 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                >
+                  <Text className="text-white font-bold text-sm">
+                    {isSubmittingKot ? "Sending..." : "Confirm & Print KOT"}
+                  </Text>
+                  <AntDesign name="printer" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
