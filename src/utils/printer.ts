@@ -12,8 +12,8 @@ export interface PrinterConfig {
 }
 
 export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
-  kotIp: "192.168.1.150",
-  billingIp: "192.168.1.200",
+  kotIp: "",
+  billingIp: "",
   port: 9100,
 };
 

@@ -71,32 +71,6 @@ export default function KotScreen() {
       `Billing Printer IP updated to: ${billingPrinterIp.trim()}`,
     );
   };
-
-  const handleTestPrint = async (
-    which: "kot" | "billing",
-    host: string,
-    label: string,
-  ) => {
-    if (!isValidIPv4(host)) {
-      Alert.alert("Invalid IP", "Save a valid printer IP address first.");
-      return;
-    }
-    const setPrinting = which === "kot" ? setPrintingKot : setPrintingBilling;
-    setPrinting(true);
-    try {
-      const config = await loadPrinterConfig();
-      await printTestPage(host.trim(), label, config.port);
-      Alert.alert("Print Sent", `Test page sent to the ${label} printer.`);
-    } catch (e) {
-      Alert.alert(
-        "Print Failed",
-        e instanceof Error ? e.message : "Could not reach the printer.",
-      );
-    } finally {
-      setPrinting(false);
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert(
       "Logout",
@@ -160,7 +134,7 @@ export default function KotScreen() {
             </View>
 
             <TextInput
-              placeholder="e.g. 192.168.1.150"
+              placeholder="e.g. 123.456.7.890"
               placeholderTextColor="#94A3B8"
               value={kotPrinterIp}
               onChangeText={setKotPrinterIp}
@@ -175,20 +149,6 @@ export default function KotScreen() {
             >
               <Text className="text-white font-bold text-xs">
                 Save KOT Printer IP
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleTestPrint("kot", kotPrinterIp, "KOT")}
-              activeOpacity={0.85}
-              disabled={printingKot}
-              className="bg-emerald-500 py-3 rounded-2xl items-center justify-center shadow-sm flex-row gap-2 disabled:opacity-60"
-            >
-              {printingKot && (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              )}
-              <Text className="text-white font-bold text-xs">
-                {printingKot ? "Printing..." : "Print Test Page"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -210,7 +170,7 @@ export default function KotScreen() {
             </View>
 
             <TextInput
-              placeholder="e.g. 192.168.1.200"
+              placeholder="e.g. 123.456.7.890"
               placeholderTextColor="#94A3B8"
               value={billingPrinterIp}
               onChangeText={setBillingPrinterIp}
@@ -225,22 +185,6 @@ export default function KotScreen() {
             >
               <Text className="text-white font-bold text-xs">
                 Save Billing Printer IP
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                handleTestPrint("billing", billingPrinterIp, "Billing")
-              }
-              activeOpacity={0.85}
-              disabled={printingBilling}
-              className="bg-emerald-500 py-3 rounded-2xl items-center justify-center shadow-sm flex-row gap-2 disabled:opacity-60"
-            >
-              {printingBilling && (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              )}
-              <Text className="text-white font-bold text-xs">
-                {printingBilling ? "Printing..." : "Print Test Page"}
               </Text>
             </TouchableOpacity>
           </View>

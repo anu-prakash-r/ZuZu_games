@@ -8,12 +8,14 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { productPrice } from "@/api/products";
+import { storeKotOrder, type KotStorePayload } from "@/api/kot";
 import { fetchTables, type ApiTable } from "@/api/tables";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
 import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
@@ -37,7 +39,7 @@ function parseApiDate(value: string | null | undefined): number | null {
 
 export default function TablesScreen() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, locations } = useAuth();
   const [apiTables, setApiTables] = useState<ApiTable[]>([]);
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [tablesError, setTablesError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function TablesScreen() {
       setTablesError(null);
       try {
         const data = await fetchTables(token);
+        console.log("table data", data);
         setApiTables(data);
       } catch (e) {
         const message =
@@ -111,6 +114,7 @@ export default function TablesScreen() {
   const [customerName, setCustomerName] = useState("");
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [menuSearch, setMenuSearch] = useState("");
+  const [isSubmittingKot, setIsSubmittingKot] = useState(false);
 
   const {
     products,
@@ -159,21 +163,62 @@ export default function TablesScreen() {
     );
   };
 
-  const handleConfirmBooking = () => {
-    if (!selectedTable) return;
+  const handleConfirmBooking = async () => {
+    if (!selectedTable || !token || isSubmittingKot) return;
 
     const total = calculateTotal();
+    const locationId =
+      selectedTable.location_id ?? locations[0]?.location_id ?? 1;
 
-    setLocalBookings((prev) => ({
-      ...prev,
-      [selectedTable.id]: {
-        itemsCount: `${totalItems} Items`,
-        price: `₹${total}`,
-        bookedAt: Date.now(),
-      },
-    }));
+    const payload: KotStorePayload = {
+      location_id: locationId,
+      res_table_id: selectedTable.id,
+      booking_id: selectedTable.booking?.id ?? null,
+      contact_id: selectedTable.booking?.contact_id ?? null,
+      res_waiter_id: null,
+      order_type: "separate",
+      chair_no: "1",
+      staff_note: null,
+      types_of_service_id: null,
+      products: products
+        .filter((p) => (quantities[p.product_id] ?? 0) > 0)
+        .map((p) => {
+          const price = productPrice(p);
+          return {
+            product_id: p.product_id,
+            variation_id: p.variation_id,
+            quantity: quantities[p.product_id] ?? 0,
+            unit_price: price,
+            unit_price_inc_tax: price,
+            item_tax: 0,
+            tax_id: null,
+            sell_line_note: null,
+          };
+        }),
+    };
 
-    setIsModalOpen(false);
+    setIsSubmittingKot(true);
+    try {
+      console.log("KOT payload:", JSON.stringify(payload, null, 2));
+      const response = await storeKotOrder(token, payload);
+      console.log("KOT response:", JSON.stringify(response, null, 2));
+
+      setLocalBookings((prev) => ({
+        ...prev,
+        [selectedTable.id]: {
+          itemsCount: `${totalItems} Items`,
+          price: `₹${total}`,
+          bookedAt: Date.now(),
+        },
+      }));
+
+      setIsModalOpen(false);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to send the KOT.";
+    } finally {
+      setIsSubmittingKot(false);
+    }
   };
 
   const occupiedTables = apiTables.filter((t) => !isTableFree(t));
@@ -619,11 +664,11 @@ export default function TablesScreen() {
                   <TouchableOpacity
                     onPress={handleConfirmBooking}
                     activeOpacity={0.85}
-                    disabled={totalItems === 0}
+                    disabled={totalItems === 0 || isSubmittingKot}
                     className="bg-emerald-500 px-5 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                   >
                     <Text className="text-white font-bold text-sm">
-                      Print KOT
+                      {isSubmittingKot ? "Sending..." : "Print KOT"}
                     </Text>
                     <AntDesign name="printer" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
