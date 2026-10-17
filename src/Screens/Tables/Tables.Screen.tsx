@@ -5,12 +5,17 @@ import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
 import { useAuth } from "@/context/AuthContext";
 import { useProducts } from "@/hooks/useProducts";
-import { printServerKot } from "@/utils/printer";
+import {
+  printServerKot,
+  loadPrinterConfig,
+  isValidIPv4,
+} from "@/utils/printer";
 import { Ionicons } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -270,16 +275,27 @@ export default function TablesScreen() {
       setExpandedNotePid(null);
       setIsModalOpen(false);
 
-      if (response.print_kot && response.kot_printer && response.kot) {
-        try {
-          await printServerKot(
-            response.kot_printer,
-            response.kot,
-            response.kot_printer_port ?? 9100,
+      if (response.kot) {
+        const config = await loadPrinterConfig();
+        const useLocalIp = isValidIPv4(config.kotIp);
+        const host = useLocalIp ? config.kotIp.trim() : response.kot_printer;
+        const port = useLocalIp
+          ? config.port
+          : (response.kot_printer_port ?? config.port);
+
+        if (host) {
+          try {
+            await printServerKot(host, response.kot!, port);
+          } catch (e) {
+            const printMsg =
+              e instanceof Error ? e.message : "Failed to print the KOT.";
+            Alert.alert("Print Failed", printMsg);
+          }
+        } else if (response.print_kot) {
+          Alert.alert(
+            "No Printer",
+            "No printer IP is configured. Set one on the KOT tab, or ask the server to send a printer.",
           );
-        } catch (e) {
-          const printMsg =
-            e instanceof Error ? e.message : "Failed to print the KOT.";
         }
       }
     } catch (e) {

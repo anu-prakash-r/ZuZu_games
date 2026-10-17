@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   Text,
   View,
@@ -16,7 +15,6 @@ import {
   DEFAULT_PRINTER_CONFIG,
   isValidIPv4,
   loadPrinterConfig,
-  printTestPage,
   savePrinterConfig,
 } from "@/utils/printer";
 import { useAuth } from "@/context/AuthContext";
@@ -33,8 +31,6 @@ export default function KotScreen() {
   const [billingPrinterIp, setBillingPrinterIp] = useState(
     DEFAULT_PRINTER_CONFIG.billingIp,
   );
-  const [printingKot, setPrintingKot] = useState(false);
-  const [printingBilling, setPrintingBilling] = useState(false);
 
   useEffect(() => {
     loadPrinterConfig().then((config) => {
