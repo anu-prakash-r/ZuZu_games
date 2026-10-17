@@ -74,7 +74,7 @@ export default function KotScreen() {
   const handleLogout = () => {
     Alert.alert(
       "Logout",
-      "Are you sure you want to log out of ZuZu Games Cafe?",
+      "Are you sure you want to log out of SaraS Waiter App?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -107,7 +107,7 @@ export default function KotScreen() {
         </TouchableOpacity>
 
         <Text className="text-[#35116B] text-lg font-black tracking-tight">
-          ZuZu Games Cafe
+          SaraS Waiter App
         </Text>
 
         <View className="w-10" />

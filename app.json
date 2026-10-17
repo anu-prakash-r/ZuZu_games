@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "ZuZu Games Cafe",
+    "name": "SaraS Waiter App",
     "slug": "Zuzu_games",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/SaraS-Web-Solution.png",
+    "icon": "./assets/images/fav.png",
     "scheme": "zuzugames",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/images/SaraS-Web-Solution.png"
+      "icon": "./assets/images/fav.png"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/SaraS-Web-Solution.png"
+        "foregroundImage": "./assets/images/fav.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anu_prakash.Zuzu_games"
@@ -21,7 +21,7 @@
     "web": {
       "output": "static",
       "bundler": "metro",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/fav.png"
     },
     "plugins": [
       "expo-router",
@@ -29,12 +29,12 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/SaraS-Web-Solution.png",
+          "image": "./assets/images/fav.png",
           "imageWidth": 220,
           "resizeMode": "contain",
           "dark": {
             "backgroundColor": "#FFFFFF",
-            "image": "./assets/images/SaraS-Web-Solution.png"
+            "image": "./assets/images/fav.png"
           }
         }
       ],

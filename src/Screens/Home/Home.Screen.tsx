@@ -133,7 +133,7 @@ export default function HomeScreen() {
                 <Text className="text-xs">👋</Text>
               </View>
               <Text className="text-[#35116B] text-xl font-black tracking-tight mt-0.5">
-                ZuZu Games Cafe
+                SaraS Waiter App
               </Text>
             </View>
           </View>
