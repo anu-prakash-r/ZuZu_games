@@ -214,6 +214,58 @@ export interface KotTicket {
   note?: string;
 }
 
+export interface ServerKotItem {
+  product_id: number;
+  variation_id: number;
+  name: string;
+  qty: number;
+  unit_price: number;
+  unit_price_inc_tax: number;
+  total_price: number;
+  note: string | null;
+}
+
+export interface ServerKot {
+  invoice_no: string;
+  table_name: string;
+  date: string;
+  time: string;
+  service_type: string;
+  items: ServerKotItem[];
+}
+
+export async function printServerKot(
+  host: string,
+  kot: ServerKot,
+  port = 9100,
+): Promise<void> {
+  let out =
+    init() +
+    alignCenter() +
+    doubleSizeOn() +
+    (kot.service_type || "KOT") +
+    LF +
+    doubleSizeOff() +
+    boldOn() +
+    `Table ${toAscii(kot.table_name)}` +
+    LF +
+    boldOff() +
+    `Invoice ${toAscii(kot.invoice_no)}` +
+    LF +
+    `${toAscii(kot.date)} ${toAscii(kot.time)}` +
+    LF +
+    alignLeft() +
+    hr();
+  for (const item of kot.items) {
+    out += row(`${item.qty}x ${item.name}`, `Rs ${item.total_price}`);
+    if (item.note) {
+      out += `Note: ${toAscii(item.note)}` + LF;
+    }
+  }
+  out += hr() + cut();
+  await sendToPrinter({ host, port, data: out });
+}
+
 export async function printKotTicket(
   host: string,
   ticket: KotTicket,

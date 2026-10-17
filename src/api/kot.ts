@@ -25,27 +25,68 @@ export interface KotStorePayload {
 }
 
 interface KotStoreApiRaw {
-  status?: boolean;
+  status?: boolean | string;
   message?: string;
   data?: unknown;
+}
+
+export interface KotResponseItem {
+  product_id: number;
+  variation_id: number;
+  name: string;
+  qty: number;
+  unit_price: number;
+  unit_price_inc_tax: number;
+  total_price: number;
+  note: string | null;
+}
+
+export interface KotResponseKot {
+  invoice_no: string;
+  table_name: string;
+  date: string;
+  time: string;
+  service_type: string;
+  items: KotResponseItem[];
+}
+
+export interface KotStoreResponse {
+  waiter_order_id: number;
+  token_no: string;
+  is_new_order: boolean;
+  business_id: number;
+  location_id: number;
+  table_id: number;
+  table_name: string;
+  contact_id: number | null;
+  booking_id: number | null;
+  status: string;
+  kot_amount: number;
+  order_total: number;
+  print_kot: boolean;
+  print_invoice: boolean;
+  kot_printer: string | null;
+  kot_printer_port: number | null;
+  kot: KotResponseKot | null;
 }
 
 export async function storeKotOrder(
   token: string,
   payload: KotStorePayload,
-): Promise<unknown> {
+): Promise<KotStoreResponse> {
   const res = await authFetch("/kot/store", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  let data: KotStoreApiRaw | null = null;
+  let data: (KotStoreResponse & KotStoreApiRaw) | null = null;
   try {
-    data = (await res.json()) as KotStoreApiRaw;
+    data = (await res.json()) as KotStoreResponse & KotStoreApiRaw;
   } catch {
     throw new Error(`Failed to store KOT (server returned ${res.status}).`);
   }
-  if (!res.ok || data?.status === false) {
+  const failed = (data as KotStoreApiRaw | null)?.status === false;
+  if (!res.ok || failed) {
     throw new Error(data?.message || `Failed to store KOT (${res.status}).`);
   }
-  return data?.data ?? data;
+  return data as KotStoreResponse;
 }
