@@ -57,6 +57,9 @@ export default function HomeScreen() {
   const displayAvailable = countsReady ? availableTables : "–";
 
   const activeSessions = tables.filter((t) => !!t.booking);
+  const MAX_HOME_SESSIONS = 3;
+  const recentSessions = activeSessions.slice(0, MAX_HOME_SESSIONS);
+  const hiddenSessionCount = activeSessions.length - recentSessions.length;
 
   const getElapsedTime = (bookedAt: number | null) => {
     if (!bookedAt) return "Just now";
@@ -243,7 +246,7 @@ export default function HomeScreen() {
               </Text>
             </View>
           ) : (
-            activeSessions.map((table) => {
+            recentSessions.map((table) => {
               const booking = table.booking!;
               const bookedAt = parseApiDate(booking.start_at);
               const guestName = booking.contact_name?.trim() || "Guest";

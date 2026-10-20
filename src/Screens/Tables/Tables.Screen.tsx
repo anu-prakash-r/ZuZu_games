@@ -45,7 +45,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 const BRAND = "#35116B";
 
 const NOTE_CHIPS = [
@@ -744,9 +744,7 @@ export default function TablesScreen() {
                   <View className="h-60 px-3 py-4 rounded-3xl justify-between border shadow-sm bg-[#35116B] border-[#35116B] shadow-purple-900/20">
                     <Pressable
                       className="flex-1"
-                      onPress={() => {
-                        openActionModal(table);
-                      }}
+                      onPress={() => handleTablePress(table)}
                     >
                       <View className="flex-row items-center justify-between">
                         <View className="px-3 py-1 rounded-xl flex-row items-center gap-1 bg-white/10 border border-white/20">
@@ -833,15 +831,21 @@ export default function TablesScreen() {
                     <View className="absolute right-[22%] top-0 bottom-0 w-[1.5px] rounded-full bg-black" />
                   </View>
                   <Pressable
-                    onPress={() => handleTablePress(table)}
+                    onPress={() => {
+                      openActionModal(table);
+                    }}
                     className="bg-[#35116B] border border-slate-200 rounded-2xl px-4 py-2.5 flex-row items-center justify-between shadow-lg shadow-purple-900/20"
                   >
                     <Text className="text-[11px] font-bold text-white">
-                      Add Items
+                      Table Actions
                     </Text>
 
                     <View className="w-7 h-7 rounded-xl items-center justify-center bg-white">
-                      <Ionicons name="add" size={20} color="#35116B" />
+                      <MaterialCommunityIcons
+                        name="view-grid-outline"
+                        size={20}
+                        color="#35116B"
+                      />
                     </View>
                   </Pressable>
                 </View>
