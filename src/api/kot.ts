@@ -70,6 +70,161 @@ export interface KotStoreResponse {
   kot: KotResponseKot | null;
 }
 
+export interface KotDetailsItem {
+  name: string;
+  qty: number;
+  unitPrice: number | null;
+  totalPrice: number | null;
+  note: string | null;
+}
+
+interface KotDetailsApiRaw {
+  status?: boolean | string;
+  message?: string;
+  data?: unknown;
+}
+
+function toNum(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
+
+function normalizeKotLine(raw: unknown): KotDetailsItem | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const nested = ["variation", "product", "item"].reduce<
+    Record<string, unknown> | null
+  >(
+    (acc, key) =>
+      acc ??
+      (r[key] && typeof r[key] === "object"
+        ? (r[key] as Record<string, unknown>)
+        : null),
+    null,
+  );
+  const name = firstString(
+    r.name,
+    r.product_name,
+    r.item_name,
+    r.display_name,
+    nested?.name,
+    nested?.product_name,
+  );
+  const qty = toNum(r.qty) ?? toNum(r.quantity) ?? 0;
+  const unitPrice =
+    toNum(r.unit_price) ??
+    toNum(r.price) ??
+    toNum(r.unit_price_inc_tax) ??
+    toNum(nested?.unit_price) ??
+    toNum(nested?.price);
+  const totalPrice =
+    toNum(r.total_price) ?? toNum(r.line_total) ?? toNum(r.total);
+  const note = firstString(
+    r.note,
+    r.sell_line_note,
+    r.item_note,
+    r.kot_note,
+    nested?.note,
+  );
+  if (!name && qty <= 0) return null;
+  return { name: name ?? "Item", qty, unitPrice, totalPrice, note };
+}
+
+const KOT_NESTED_KEYS = [
+  "items",
+  "kot_items",
+  "products",
+  "sell_lines",
+  "order_items",
+  "lines",
+  "kots",
+];
+
+function collectKotItems(node: unknown, out: KotDetailsItem[], depth = 0): void {
+  if (depth > 5 || node === null || node === undefined) return;
+
+  if (Array.isArray(node)) {
+    for (const el of node) {
+      const isContainer =
+        el !== null &&
+        typeof el === "object" &&
+        KOT_NESTED_KEYS.some((k) => k in (el as object));
+      if (isContainer) {
+        collectKotItems(el, out, depth + 1);
+      } else {
+        const line = normalizeKotLine(el);
+        if (line) out.push(line);
+      }
+    }
+    return;
+  }
+
+  if (typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  let matched = false;
+  for (const key of KOT_NESTED_KEYS) {
+    if (key in obj) {
+      matched = true;
+      collectKotItems(obj[key], out, depth + 1);
+    }
+  }
+  if (!matched) {
+    if ("data" in obj) collectKotItems(obj.data, out, depth + 1);
+    else {
+      const line = normalizeKotLine(obj);
+      if (line) out.push(line);
+    }
+  }
+}
+
+/**
+ * Lenient extractor for `/kot/details` — the endpoint's exact shape is not
+ * typed yet, so look for order lines under the common wrappers.
+ */
+export function extractKotDetailsItems(payload: unknown): KotDetailsItem[] {
+  const out: KotDetailsItem[] = [];
+  collectKotItems(payload, out);
+  return out;
+}
+
+/** GET `/kot/details?table_id=<id>&booking_id=<id>` — food details for a room. */
+export async function fetchKotDetails(
+  token: string,
+  tableId: number,
+  bookingId: number,
+): Promise<KotDetailsItem[]> {
+  const res = await authFetch(
+    `/kot/details?table_id=${tableId}&booking_id=${bookingId}`,
+    token,
+  );
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(
+      `Failed to load KOT details (server returned ${res.status}).`,
+    );
+  }
+  const raw = data as KotDetailsApiRaw | null;
+  if (!res.ok || raw?.status === false) {
+    throw new Error(
+      raw?.message || `Failed to load KOT details (${res.status}).`,
+    );
+  }
+  return extractKotDetailsItems(data);
+}
+
 export async function storeKotOrder(
   token: string,
   payload: KotStorePayload,
