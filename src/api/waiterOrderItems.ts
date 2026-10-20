@@ -24,9 +24,13 @@ export async function fetchWaiterOrderItems(
   token: string,
   bookingId: number,
 ): Promise<WaiterOrderItemsResponse> {
-  const res = await authFetch(`/room-booking`, token, {
-    method: "GET",
-  });
+  const res = await authFetch(
+    `/room-booking/${bookingId}/waiter-order-items`,
+    token,
+    {
+      method: "GET",
+    },
+  );
 
   let data: (WaiterOrderItemsResponse & WaiterOrderItemsApiRaw) | null = null;
   try {

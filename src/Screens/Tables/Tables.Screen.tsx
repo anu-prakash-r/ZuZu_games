@@ -83,7 +83,6 @@ export default function TablesScreen() {
       setTablesError(null);
       try {
         const data = await fetchTables(token);
-        console.log("table data", data);
         setApiTables(data);
       } catch (e) {
         const message =
@@ -235,7 +234,6 @@ export default function TablesScreen() {
 
     const bookingId = actionTable.booking?.id;
     if (bookingId === null || bookingId === undefined) {
-      Alert.alert("Cannot delete", "This room has no active session.");
       return;
     }
 
@@ -245,10 +243,6 @@ export default function TablesScreen() {
       const lines = extractWaiterLines(res);
 
       if (lines.length === 0) {
-        Alert.alert(
-          "No items found",
-          "Could not find any order lines for this room to delete.",
-        );
         return;
       }
 
@@ -262,7 +256,6 @@ export default function TablesScreen() {
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to delete the items.";
-      Alert.alert("Delete Failed", message);
     } finally {
       setIsDeletingItems(false);
     }
@@ -273,7 +266,6 @@ export default function TablesScreen() {
 
     const bookingId = actionTable.booking?.id;
     if (bookingId === null || bookingId === undefined) {
-      Alert.alert("Cannot edit", "This room has no active session.");
       return;
     }
 
@@ -286,16 +278,11 @@ export default function TablesScreen() {
       const lines = extractWaiterLines(res);
       setEditLines(lines);
       if (lines.length === 0) {
-        Alert.alert(
-          "No items found",
-          "Could not find any order lines for this room to edit.",
-        );
         setIsEditModalOpen(false);
       }
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to load the items.";
-      Alert.alert("Load Failed", message);
       setIsEditModalOpen(false);
     } finally {
       setIsLoadingEditLines(false);
@@ -325,7 +312,6 @@ export default function TablesScreen() {
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to save the items.";
-      Alert.alert("Save Failed", message);
     } finally {
       setIsSavingEdit(false);
     }
@@ -336,7 +322,6 @@ export default function TablesScreen() {
 
     const bookingId = actionTable.booking?.id;
     if (bookingId === null || bookingId === undefined) {
-      Alert.alert("Cannot close table", "This room has no active session.");
       return;
     }
 
@@ -355,7 +340,6 @@ export default function TablesScreen() {
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to close the table.";
-      Alert.alert("Close Table Failed", message);
     } finally {
       setIsClosingTable(false);
     }
@@ -472,9 +456,7 @@ export default function TablesScreen() {
 
     setIsSubmittingKot(true);
     try {
-      console.log("KOT payload:", JSON.stringify(payload, null, 2));
       const response = await storeKotOrder(token, payload);
-      console.log("KOT response:", JSON.stringify(response, null, 2));
 
       setLocalBookings((prev) => ({
         ...prev,
@@ -503,19 +485,13 @@ export default function TablesScreen() {
           } catch (e) {
             const printMsg =
               e instanceof Error ? e.message : "Failed to print the KOT.";
-            Alert.alert("Print Failed", printMsg);
           }
         } else if (response.print_kot) {
-          Alert.alert(
-            "No Printer",
-            "No printer IP is configured. Set one on the KOT tab, or ask the server to send a printer.",
-          );
         }
       }
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to send the KOT.";
-      Alert.alert("KOT Failed", message);
     } finally {
       setIsSubmittingKot(false);
     }
@@ -1381,20 +1357,7 @@ export default function TablesScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      onPress={() => {
-                        Alert.alert(
-                          "Delete Items",
-                          "Remove all order items for this room? This updates the server.",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: handleDeleteItems,
-                            },
-                          ],
-                        );
-                      }}
+                      onPress={() => {}}
                       activeOpacity={0.8}
                       disabled={isDeletingItems}
                       className="bg-red-50 border border-red-200 py-3.5 rounded-2xl flex-row items-center justify-center gap-2 disabled:opacity-60"

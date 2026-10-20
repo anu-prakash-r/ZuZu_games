@@ -71,7 +71,6 @@ export async function closeTable(
     return await closeTableBill(token, bookingId, payload);
   } catch (e) {
     if (isAlreadyBilled(e)) {
-      console.log(`[bill] booking ${bookingId} was already billed`);
       return {};
     }
     throw e;
