@@ -4,7 +4,7 @@ import {
   type KotStorePayload,
   type KotDetailsItem,
 } from "@/api/kot";
-import { closeTableBill } from "@/api/bill";
+import { closeTable } from "@/api/bill";
 import {
   fetchWaiterOrderItems,
   storeWaiterOrderItems,
@@ -334,15 +334,21 @@ export default function TablesScreen() {
   const handleCloseTable = async () => {
     if (!actionTable || !token || isClosingTable) return;
 
-    const orderId = actionTable.booking?.id;
-    if (orderId === null || orderId === undefined) {
+    const bookingId = actionTable.booking?.id;
+    if (bookingId === null || bookingId === undefined) {
       Alert.alert("Cannot close table", "This room has no active session.");
       return;
     }
 
     setIsClosingTable(true);
     try {
-      await closeTableBill(token, orderId);
+      await closeTable(token, bookingId);
+      setLocalBookings((prev) => {
+        if (!(actionTable.id in prev)) return prev;
+        const copy = { ...prev };
+        delete copy[actionTable.id];
+        return copy;
+      });
       setIsActionModalOpen(false);
       setActionTable(null);
       await loadTables(false);
@@ -509,6 +515,7 @@ export default function TablesScreen() {
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Failed to send the KOT.";
+      Alert.alert("KOT Failed", message);
     } finally {
       setIsSubmittingKot(false);
     }

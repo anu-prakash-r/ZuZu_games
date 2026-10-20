@@ -27,20 +27,57 @@ export async function closeTableBill(
     body: JSON.stringify(payload ?? {}),
   });
 
+  const rawBody = await res.text().catch(() => "");
+
   let data: (CloseBillResponse & BillApiRaw) | null = null;
-  try {
-    data = (await res.json()) as CloseBillResponse & BillApiRaw;
-  } catch {
+  if (rawBody.trim().length > 0) {
+    try {
+      data = JSON.parse(rawBody) as CloseBillResponse & BillApiRaw;
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!res.ok) {
     throw new Error(
-      `Failed to close the bill (server returned ${res.status}).`,
+      data?.message ||
+        `Failed to close the bill (server returned ${res.status}).`,
     );
   }
 
-  const failed = (data as BillApiRaw | null)?.status === false;
-  if (!res.ok || failed) {
+  if (!data) {
+    if (rawBody.trim().length === 0) return {};
+
+    const snippet = rawBody.trim().slice(0, 120).replace(/\s+/g, " ");
     throw new Error(
-      data?.message || `Failed to close the bill (${res.status}).`,
+      `Server returned an unexpected response instead of a bill (HTTP ${res.status}): ${snippet}`,
+    );
+  }
+
+  if ((data as BillApiRaw).status === false) {
+    throw new Error(
+      data.message || `Failed to close the bill (${res.status}).`,
     );
   }
   return data as CloseBillResponse;
+}
+
+export async function closeTable(
+  token: string,
+  bookingId: number,
+  payload?: CloseBillPayload,
+): Promise<CloseBillResponse> {
+  try {
+    return await closeTableBill(token, bookingId, payload);
+  } catch (e) {
+    if (isAlreadyBilled(e)) {
+      console.log(`[bill] booking ${bookingId} was already billed`);
+      return {};
+    }
+    throw e;
+  }
+}
+
+function isAlreadyBilled(e: unknown): boolean {
+  return e instanceof Error && /already billed/i.test(e.message);
 }
