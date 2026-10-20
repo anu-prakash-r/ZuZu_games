@@ -1,6 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 import TcpSocket from "react-native-tcp-socket";
 
+import { HOURLY_RATE } from "./sessionCharges";
+
 const STORAGE_KEY = "zuzu_printers_config";
 
 let memoryCache: PrinterConfig | null = null;
@@ -302,6 +304,12 @@ export interface BillTicket {
   table: string;
   orderId: string;
   items: ReceiptItem[];
+  elapsed?: string;
+  roomCharge?: number;
+  extraPersons?: number;
+  extraPersonCharge?: number;
+  hourlyRate?: number;
+  invoiceNo?: string;
 }
 
 export async function printBill(
@@ -309,7 +317,11 @@ export async function printBill(
   ticket: BillTicket,
   port = 9100,
 ): Promise<void> {
-  const total = ticket.items.reduce((s, i) => s + i.qty * i.price, 0);
+  const foodTotal = ticket.items.reduce((s, i) => s + i.qty * i.price, 0);
+  const roomCharge = ticket.roomCharge ?? 0;
+  const extraPersonCharge = ticket.extraPersonCharge ?? 0;
+  const total = foodTotal + roomCharge + extraPersonCharge;
+
   let out =
     init() +
     alignCenter() +
@@ -319,14 +331,51 @@ export async function printBill(
     doubleSizeOff() +
     `Table ${toAscii(ticket.table)}  Order ${toAscii(ticket.orderId)}` +
     LF +
+    (ticket.invoiceNo ? `Invoice ${toAscii(ticket.invoiceNo)}` + LF : "") +
     formatDateTime() +
     LF +
     alignLeft() +
-    hr();
+    hr() +
+    boldOn() +
+    "FOOD" +
+    LF +
+    boldOff();
+
+  if (ticket.items.length === 0) {
+    out += row("(no food ordered)", "");
+  }
   for (const item of ticket.items) {
     out += row(`${item.qty}x ${item.name}`, `Rs ${item.qty * item.price}`);
   }
-  out += hr() + boldOn() + row("TOTAL", `Rs ${total}`) + boldOff() + hr();
-  out += alignCenter() + "Thank you, visit again!" + LF + cut();
+
+  if (roomCharge > 0 || ticket.elapsed) {
+    out +=
+      hr() +
+      boldOn() +
+      "SESSION" +
+      LF +
+      boldOff() +
+      row(
+        `Room ${ticket.elapsed ?? ""} @ Rs ${ticket.hourlyRate ?? HOURLY_RATE}/hr`,
+        `Rs ${roomCharge}`,
+      );
+    if ((ticket.extraPersons ?? 0) > 0) {
+      out += row(
+        `Extra persons x${ticket.extraPersons}`,
+        `Rs ${extraPersonCharge}`,
+      );
+    }
+  }
+
+  out +=
+    hr() +
+    boldOn() +
+    row("TOTAL", `Rs ${total}`) +
+    boldOff() +
+    hr() +
+    alignCenter() +
+    "Thank you, visit again!" +
+    LF +
+    cut();
   await sendToPrinter({ host, port, data: out });
 }
