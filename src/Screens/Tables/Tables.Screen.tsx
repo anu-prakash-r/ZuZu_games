@@ -1,4 +1,10 @@
 import { storeKotOrder, type KotStorePayload } from "@/api/kot";
+import { closeTableBill } from "@/api/bill";
+import {
+  fetchWaiterOrderItems,
+  storeWaiterOrderItems,
+  type WaiterOrderItemInput,
+} from "@/api/waiterOrderItems";
 import { productPrice } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
 import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
@@ -15,6 +21,7 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -59,8 +66,6 @@ export default function TablesScreen() {
   const [isLoadingTables, setIsLoadingTables] = useState(false);
   const [tablesError, setTablesError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  // Booking API isn't available yet — confirmed bookings are applied
-  // locally on top of the server data until the next refresh.
   const [localBookings, setLocalBookings] = useState<
     Record<number, LocalBooking>
   >({});
@@ -133,6 +138,14 @@ export default function TablesScreen() {
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [expandedNotePid, setExpandedNotePid] = useState<number | null>(null);
   const [itemNoteText, setItemNoteText] = useState<Record<number, string>>({});
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [actionTable, setActionTable] = useState<ApiTable | null>(null);
+  const [isClosingTable, setIsClosingTable] = useState(false);
+  const [isDeletingItems, setIsDeletingItems] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editLines, setEditLines] = useState<WaiterOrderItemInput[]>([]);
+  const [isLoadingEditLines, setIsLoadingEditLines] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const {
     products,
@@ -150,6 +163,161 @@ export default function TablesScreen() {
     setExpandedNotePid(null);
     setIsNoteModalOpen(false);
     setIsModalOpen(true);
+  };
+
+  const openActionModal = (table: ApiTable) => {
+    setActionTable(table);
+    setIsActionModalOpen(true);
+  };
+
+  const extractWaiterLines = (res: any): WaiterOrderItemInput[] => {
+    const candidates = [
+      res?.data,
+      res?.data?.items,
+      res?.data?.waiter_order_items,
+      res?.items,
+      res?.waiter_order_items,
+    ];
+    for (const c of candidates) {
+      if (Array.isArray(c) && c.length > 0 && typeof c[0] === "object") {
+        return c
+          .filter(
+            (l: any) =>
+              l && l.id != null && l.waiter_order_id != null && l.qty != null,
+          )
+          .map((l: any) => ({
+            id: Number(l.id),
+            waiter_order_id: Number(l.waiter_order_id),
+            qty: Number(l.qty),
+          }));
+      }
+    }
+    return [];
+  };
+
+  const handleDeleteItems = async () => {
+    if (!actionTable || !token || isDeletingItems) return;
+
+    const bookingId = actionTable.booking?.id;
+    if (bookingId === null || bookingId === undefined) {
+      Alert.alert("Cannot delete", "This room has no active session.");
+      return;
+    }
+
+    setIsDeletingItems(true);
+    try {
+      const res = await fetchWaiterOrderItems(token, bookingId);
+      const lines = extractWaiterLines(res);
+
+      if (lines.length === 0) {
+        Alert.alert(
+          "No items found",
+          "Could not find any order lines for this room to delete.",
+        );
+        return;
+      }
+
+      await storeWaiterOrderItems(token, bookingId, {
+        items: lines.map((l) => ({ ...l, qty: 0 })),
+      });
+
+      setIsActionModalOpen(false);
+      setActionTable(null);
+      await loadTables(false);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to delete the items.";
+      Alert.alert("Delete Failed", message);
+    } finally {
+      setIsDeletingItems(false);
+    }
+  };
+
+  const handleOpenEditItems = async () => {
+    if (!actionTable || !token) return;
+
+    const bookingId = actionTable.booking?.id;
+    if (bookingId === null || bookingId === undefined) {
+      Alert.alert("Cannot edit", "This room has no active session.");
+      return;
+    }
+
+    setIsLoadingEditLines(true);
+    setEditLines([]);
+    setIsActionModalOpen(false);
+    setIsEditModalOpen(true);
+    try {
+      const res = await fetchWaiterOrderItems(token, bookingId);
+      const lines = extractWaiterLines(res);
+      setEditLines(lines);
+      if (lines.length === 0) {
+        Alert.alert(
+          "No items found",
+          "Could not find any order lines for this room to edit.",
+        );
+        setIsEditModalOpen(false);
+      }
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to load the items.";
+      Alert.alert("Load Failed", message);
+      setIsEditModalOpen(false);
+    } finally {
+      setIsLoadingEditLines(false);
+    }
+  };
+
+  const changeEditQty = (index: number, delta: number) => {
+    setEditLines((prev) =>
+      prev.map((l, i) =>
+        i === index ? { ...l, qty: Math.max(0, l.qty + delta) } : l,
+      ),
+    );
+  };
+
+  const handleSaveEditItems = async () => {
+    if (!actionTable || !token || isSavingEdit) return;
+
+    const bookingId = actionTable.booking?.id;
+    if (bookingId === null || bookingId === undefined) return;
+
+    setIsSavingEdit(true);
+    try {
+      await storeWaiterOrderItems(token, bookingId, { items: editLines });
+      setIsEditModalOpen(false);
+      setEditLines([]);
+      await loadTables(false);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to save the items.";
+      Alert.alert("Save Failed", message);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleCloseTable = async () => {
+    if (!actionTable || !token || isClosingTable) return;
+
+    const orderId = actionTable.booking?.id;
+    if (orderId === null || orderId === undefined) {
+      Alert.alert("Cannot close table", "This room has no active session.");
+      return;
+    }
+
+    setIsClosingTable(true);
+    try {
+      await closeTableBill(token, orderId);
+      setIsActionModalOpen(false);
+      setActionTable(null);
+      await loadTables(false);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to close the table.";
+      Alert.alert("Close Table Failed", message);
+    } finally {
+      setIsClosingTable(false);
+    }
   };
 
   const changeQty = (productId: number, delta: number) => {
@@ -426,8 +594,7 @@ export default function TablesScreen() {
                     <Pressable
                       className="flex-1"
                       onPress={() => {
-                        setDetailTable(table);
-                        setIsDetailOpen(true);
+                        openActionModal(table);
                       }}
                     >
                       <View className="flex-row items-center justify-between">
@@ -999,6 +1166,216 @@ export default function TablesScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={isActionModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsActionModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-center items-center bg-black/60 px-5"
+          onPress={() => setIsActionModalOpen(false)}
+        >
+          <Pressable
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl"
+            onPress={(e) => e.stopPropagation()}
+          >
+            {actionTable && (
+              <>
+                <View className="items-center mb-5">
+                  <View className="w-14 h-14 rounded-2xl bg-[#35116B] items-center justify-center mb-2">
+                    <Ionicons
+                      name="game-controller"
+                      size={26}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <Text className="text-xl font-black text-[#35116B]">
+                    Room {actionTable.name}
+                  </Text>
+                  <Text className="text-slate-400 text-xs font-semibold mt-1">
+                    {actionTable.booking?.contact_name?.trim() || "Guest"} ·{" "}
+                    {actionTable.booking?.total_head_count ??
+                      actionTable.booking?.head_count ??
+                      0}{" "}
+                    Guests
+                  </Text>
+                </View>
+
+                <View className="gap-2.5">
+                  <TouchableOpacity
+                    onPress={handleOpenEditItems}
+                    activeOpacity={0.8}
+                    className="bg-purple-50 border border-purple-200 py-3.5 rounded-2xl flex-row items-center justify-center gap-2"
+                  >
+                    <Ionicons name="create-outline" size={18} color={BRAND} />
+                    <Text className="text-[#35116B] font-bold text-sm">
+                      Edit Items
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleCloseTable}
+                    activeOpacity={0.85}
+                    disabled={isClosingTable}
+                    className="bg-emerald-500 py-3.5 rounded-2xl flex-row items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-60"
+                  >
+                    {isClosingTable ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+                    )}
+                    <Text className="text-white font-bold text-sm">
+                      {isClosingTable ? "Closing..." : "Close Table"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      Alert.alert(
+                        "Delete Items",
+                        "Remove all order items for this room? This updates the server.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: handleDeleteItems,
+                          },
+                        ],
+                      );
+                    }}
+                    activeOpacity={0.8}
+                    disabled={isDeletingItems}
+                    className="bg-red-50 border border-red-200 py-3.5 rounded-2xl flex-row items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {isDeletingItems ? (
+                      <ActivityIndicator size="small" color="#DC2626" />
+                    ) : (
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#DC2626"
+                      />
+                    )}
+                    <Text className="text-red-600 font-bold text-sm">
+                      {isDeletingItems ? "Deleting..." : "Delete Items"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsActionModalOpen(false);
+                      setActionTable(null);
+                    }}
+                    activeOpacity={0.8}
+                    className="py-3 items-center mt-1 bg-zinc-100 border border-zinc-300 rounded-2xl"
+                  >
+                    <Text className="text-slate-500 font-semibold text-sm">
+                      Close
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={isEditModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-center items-center bg-black/60 px-5"
+          onPress={() => setIsEditModalOpen(false)}
+        >
+          <Pressable
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl max-h-[85%]"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <Text className="text-lg font-extrabold text-[#35116B]">
+                Edit Items — Room {actionTable?.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsEditModalOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {isLoadingEditLines ? (
+              <View className="items-center py-8 gap-2">
+                <ActivityIndicator size="small" color={BRAND} />
+                <Text className="text-slate-400 text-xs font-semibold">
+                  Loading items...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {editLines.map((line, idx) => (
+                  <View
+                    key={`${line.id}-${idx}`}
+                    className="flex-row items-center justify-between bg-slate-50 p-3.5 rounded-2xl mb-2.5 border border-slate-200"
+                  >
+                    <View className="flex-1 pr-2">
+                      <Text className="text-slate-900 font-bold text-sm">
+                        Item #{line.id}
+                      </Text>
+                      <Text className="text-purple-900 font-extrabold text-xs">
+                        Line {line.waiter_order_id}
+                      </Text>
+                    </View>
+
+                    <View className="flex-row items-center gap-3 bg-white px-3 py-2 rounded-xl border border-slate-200">
+                      <TouchableOpacity
+                        onPress={() => changeEditQty(idx, -1)}
+                        activeOpacity={0.7}
+                        className="w-8 h-8 rounded-lg bg-slate-100 items-center justify-center"
+                      >
+                        <Ionicons name="remove" size={16} color="#35116B" />
+                      </TouchableOpacity>
+                      <Text className="font-extrabold text-slate-900 text-md min-w-[16px] text-center">
+                        {line.qty}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => changeEditQty(idx, 1)}
+                        activeOpacity={0.7}
+                        className="w-8 h-8 rounded-lg bg-[#35116B] items-center justify-center"
+                      >
+                        <Ionicons name="add" size={16} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <View className="pt-4 border-t border-slate-100 mt-2">
+              <TouchableOpacity
+                onPress={handleSaveEditItems}
+                disabled={isSavingEdit || isLoadingEditLines}
+                activeOpacity={0.85}
+                className="bg-[#35116B] py-3.5 rounded-2xl flex-row items-center justify-center gap-2 shadow-md shadow-purple-900/20 disabled:opacity-60"
+              >
+                {isSavingEdit ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                )}
+                <Text className="text-white font-bold text-sm">
+                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

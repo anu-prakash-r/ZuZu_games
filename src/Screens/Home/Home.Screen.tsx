@@ -325,7 +325,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => {
-                      router.push("/orders");
+                      router.push("/tables");
                     }}
                     className="mt-4 bg-[#35116B] rounded-2xl py-3.5 flex-row items-center justify-center gap-2 shadow-md shadow-purple-900/20"
                   >
