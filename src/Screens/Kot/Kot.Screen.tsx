@@ -86,7 +86,7 @@ export default function KotScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1">
       <View className="flex-row items-center justify-between px-5 py-3 border-b border-slate-200">
         <TouchableOpacity
           onPress={() => {

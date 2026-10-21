@@ -62,9 +62,9 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1">
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7FB" />
-      <View className="px-5 pt-4 pb-3 border-b border-slate-200 bg-white">
+      <View className="px-5 pt-4 pb-3 border-b border-slate-200">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center">
             <Image
