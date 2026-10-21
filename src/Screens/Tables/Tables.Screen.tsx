@@ -1,12 +1,16 @@
 import { closeTable } from "@/api/bill";
 import {
-  fetchKotDetails,
+  fetchKotDetailsBundle,
   storeKotOrder,
   type KotDetailsItem,
   type KotStorePayload,
 } from "@/api/kot";
 import { fetchProducts, productPrice, type Product } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
+import {
+  replaceWaiterOrderItems,
+  syncWaiterOrderItems,
+} from "@/api/waiterOrders";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
 import MenuModal from "@/components/Tables/MenuModal";
 import NoteModal from "@/components/Tables/NoteModal";
@@ -16,6 +20,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useCategories } from "@/hooks/useCategories";
 import { useItemNotes } from "@/hooks/useItemNotes";
 import { useProducts } from "@/hooks/useProducts";
+import {
+  buildEditPrefill,
+  buildSyncLines,
+  matchLineToProduct,
+} from "@/utils/orderLines";
 import {
   isValidIPv4,
   loadPrinterConfig,
@@ -31,6 +40,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -130,6 +140,9 @@ export default function TablesScreen() {
   const [kotDetails, setKotDetails] = useState<KotDetailsItem[]>([]);
   const [isLoadingKotDetails, setIsLoadingKotDetails] = useState(false);
   const [kotDetailsError, setKotDetailsError] = useState<string | null>(null);
+  const [waiterOrderIds, setWaiterOrderIds] = useState<Record<number, number>>(
+    {},
+  );
 
   const notes = useItemNotes();
 
@@ -152,6 +165,29 @@ export default function TablesScreen() {
     setIsModalOpen(true);
   };
 
+  const rememberWaiterOrderId = useCallback(
+    (
+      bookingId: number | null | undefined,
+      waiterOrderId: number | null | undefined,
+    ) => {
+      if (bookingId === null || bookingId === undefined || !waiterOrderId)
+        return;
+      setWaiterOrderIds((prev) =>
+        prev[bookingId] === waiterOrderId
+          ? prev
+          : { ...prev, [bookingId]: waiterOrderId },
+      );
+    },
+    [],
+  );
+
+  const waiterOrderIdFor = (
+    bookingId: number | null | undefined,
+  ): number | null =>
+    bookingId === null || bookingId === undefined
+      ? null
+      : (waiterOrderIds[bookingId] ?? null);
+
   const loadKotDetails = useCallback(
     async (table: ApiTable) => {
       const bookingId = table.booking?.id ?? null;
@@ -165,8 +201,9 @@ export default function TablesScreen() {
       setKotDetailsError(null);
       setKotDetails([]);
       try {
-        const items = await fetchKotDetails(token, table.id, bookingId);
-        setKotDetails(items);
+        const bundle = await fetchKotDetailsBundle(token, table.id, bookingId);
+        setKotDetails(bundle.items);
+        rememberWaiterOrderId(bookingId, bundle.waiterOrderId);
       } catch (e) {
         setKotDetailsError(
           e instanceof Error ? e.message : "Failed to load food details.",
@@ -175,7 +212,7 @@ export default function TablesScreen() {
         setIsLoadingKotDetails(false);
       }
     },
-    [token],
+    [token, rememberWaiterOrderId],
   );
 
   const openActionModal = (table: ApiTable) => {
@@ -184,32 +221,28 @@ export default function TablesScreen() {
     loadKotDetails(table);
   };
 
-  const buildEditPrefill = (
-    lines: KotDetailsItem[],
-    catalogue: Product[],
-  ): Record<number, number> => {
-    const seed: Record<number, number> = {};
-    for (const item of lines) {
-      if (item.qty <= 0) continue;
+  const runDeleteItems = async (table: ApiTable, bookingId: number) => {
+    if (!token || isDeletingItems) return;
 
-      const match =
-        catalogue.find(
-          (p) => item.productId != null && p.product_id === item.productId,
-        ) ??
-        catalogue.find(
-          (p) =>
-            p.product_name.trim().toLowerCase() ===
-            item.name.trim().toLowerCase(),
-        );
+    setIsDeletingItems(true);
+    try {
+      await replaceWaiterOrderItems(token, bookingId, []);
 
-      if (match) {
-        seed[match.product_id] = (seed[match.product_id] ?? 0) + item.qty;
-      }
+      setIsActionModalOpen(false);
+      setActionTable(null);
+      await loadTables(false);
+      await loadKotDetails(table);
+    } catch (e) {
+      Alert.alert(
+        "Could not delete items",
+        e instanceof Error ? e.message : "Failed to delete the items.",
+      );
+    } finally {
+      setIsDeletingItems(false);
     }
-    return seed;
   };
 
-  const handleDeleteItems = async () => {
+  const handleDeleteItems = () => {
     if (!actionTable || !token || isDeletingItems) return;
 
     const bookingId = actionTable.booking?.id;
@@ -217,39 +250,56 @@ export default function TablesScreen() {
       return;
     }
 
-    setIsDeletingItems(true);
-    try {
-      setIsActionModalOpen(false);
-      setActionTable(null);
-      await loadTables(false);
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to delete the items.";
-    } finally {
-      setIsDeletingItems(false);
+    if (kotDetails.length === 0) {
+      Alert.alert(
+        "Nothing to delete",
+        "No food items were found for this room.",
+      );
+      return;
     }
+
+    const table = actionTable;
+    Alert.alert(
+      "Delete items",
+      `Remove all ${kotDetails.length} item${
+        kotDetails.length === 1 ? "" : "s"
+      } from ${table.name}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => runDeleteItems(table, bookingId),
+        },
+      ],
+    );
   };
 
   const handleOpenEditItems = async () => {
     if (!actionTable || !token) return;
 
-    const bookingId = actionTable.booking?.id ?? null;
+    const table = actionTable;
+    const bookingId = table.booking?.id ?? null;
 
-    // The sheet's cached lines are reused when present; if the fetch is still
-    // in flight (or failed) we pull them here so the picker isn't blank.
-    const lines =
-      kotDetails.length > 0 || bookingId === null
-        ? kotDetails
-        : await fetchKotDetails(token, actionTable.id, bookingId).catch(
-            () => [] as KotDetailsItem[],
-          );
+    let lines = kotDetails;
+    if (lines.length === 0 && bookingId !== null) {
+      const bundle = await fetchKotDetailsBundle(
+        token,
+        table.id,
+        bookingId,
+      ).catch(() => null);
+      if (bundle) {
+        lines = bundle.items;
+        rememberWaiterOrderId(bookingId, bundle.waiterOrderId);
+      }
+    }
 
     const catalogue =
       products.length > 0
         ? products
         : await fetchProducts(token).catch(() => [] as Product[]);
 
-    setSelectedTable(actionTable);
+    setSelectedTable(table);
     setQuantities(buildEditPrefill(lines, catalogue));
     setMenuSearch("");
     setSelectedCategoryId(null);
@@ -258,56 +308,101 @@ export default function TablesScreen() {
     setIsModalOpen(true);
   };
 
+  const buildKotPayload = (
+    table: ApiTable,
+    selected: Product[],
+  ): KotStorePayload => ({
+    location_id: table.location_id ?? locations[0]?.location_id ?? 1,
+    res_table_id: table.id,
+    booking_id: table.booking?.id ?? null,
+    contact_id: table.booking?.contact_id ?? null,
+    res_waiter_id: null,
+    order_type: "separate",
+    chair_no: "1",
+    staff_note: null,
+    types_of_service_id: null,
+    products: selected.map((p) => {
+      const price = productPrice(p);
+      return {
+        product_id: p.product_id,
+        variation_id: p.variation_id,
+        quantity: quantities[p.product_id] ?? 0,
+        unit_price: price,
+        unit_price_inc_tax: price,
+        item_tax: 0,
+        tax_id: null,
+        sell_line_note: notes.composeNote(p.product_id),
+      };
+    }),
+  });
+
   const handleSaveEditItems = async () => {
     if (!actionTable || !token || isSavingEdit) return;
 
-    const bookingId = actionTable.booking?.id;
+    const table = actionTable;
+    const bookingId = table.booking?.id;
     if (bookingId === null || bookingId === undefined) return;
 
-    const selected = products.filter(
-      (p) => (quantities[p.product_id] ?? 0) > 0,
-    );
-    if (selected.length === 0) {
+    const catalogue =
+      products.length > 0
+        ? products
+        : await fetchProducts(token).catch(() => [] as Product[]);
+
+    if (catalogue.length === 0 && kotDetails.length > 0) {
+      Alert.alert(
+        "Menu unavailable",
+        "The menu could not be loaded, so the ordered items cannot be matched for editing. Please try again.",
+      );
       return;
     }
 
+    const syncLines =
+      kotDetails.length > 0
+        ? buildSyncLines(kotDetails, catalogue, quantities)
+        : [];
+
+    const orderedProductIds = new Set<number>();
+    for (const line of kotDetails) {
+      const product = matchLineToProduct(line, catalogue);
+      if (product) orderedProductIds.add(product.product_id);
+    }
+    const additions = catalogue.filter(
+      (p) =>
+        !orderedProductIds.has(p.product_id) &&
+        (quantities[p.product_id] ?? 0) > 0,
+    );
+
+    if (syncLines.length === 0 && additions.length === 0) return;
+
     setIsSavingEdit(true);
     try {
-      const locationId =
-        actionTable.location_id ?? locations[0]?.location_id ?? 1;
+      if (syncLines.length > 0) {
+        await syncWaiterOrderItems(
+          token,
+          bookingId,
+          waiterOrderIdFor(bookingId),
+          syncLines,
+        );
+      }
 
-      const payload: KotStorePayload = {
-        location_id: locationId,
-        res_table_id: actionTable.id,
-        booking_id: bookingId,
-        contact_id: actionTable.booking?.contact_id ?? null,
-        res_waiter_id: null,
-        order_type: "separate",
-        chair_no: "1",
-        staff_note: null,
-        types_of_service_id: null,
-        products: selected.map((p) => {
-          const price = productPrice(p);
-          return {
-            product_id: p.product_id,
-            variation_id: p.variation_id,
-            quantity: quantities[p.product_id] ?? 0,
-            unit_price: price,
-            unit_price_inc_tax: price,
-            item_tax: 0,
-            tax_id: null,
-            sell_line_note: notes.composeNote(p.product_id),
-          };
-        }),
-      };
-
-      await storeKotOrder(token, payload);
+      if (additions.length > 0) {
+        const response = await storeKotOrder(
+          token,
+          buildKotPayload(table, additions),
+        );
+        rememberWaiterOrderId(bookingId, response.waiter_order_id);
+      }
 
       setIsModalOpen(false);
       setIsEditMode(false);
       setQuantities({});
+      await loadKotDetails(table);
       await loadTables(false);
     } catch (e) {
+      Alert.alert(
+        "Could not save changes",
+        e instanceof Error ? e.message : "Failed to save the item changes.",
+      );
     } finally {
       setIsSavingEdit(false);
     }
@@ -425,39 +520,18 @@ export default function TablesScreen() {
     if (!selectedTable || !token || isSubmittingKot) return;
 
     const total = calculateTotal();
-    const locationId =
-      selectedTable.location_id ?? locations[0]?.location_id ?? 1;
-
-    const payload: KotStorePayload = {
-      location_id: locationId,
-      res_table_id: selectedTable.id,
-      booking_id: selectedTable.booking?.id ?? null,
-      contact_id: selectedTable.booking?.contact_id ?? null,
-      res_waiter_id: null,
-      order_type: "separate",
-      chair_no: "1",
-      staff_note: null,
-      types_of_service_id: null,
-      products: products
-        .filter((p) => (quantities[p.product_id] ?? 0) > 0)
-        .map((p) => {
-          const price = productPrice(p);
-          return {
-            product_id: p.product_id,
-            variation_id: p.variation_id,
-            quantity: quantities[p.product_id] ?? 0,
-            unit_price: price,
-            unit_price_inc_tax: price,
-            item_tax: 0,
-            tax_id: null,
-            sell_line_note: notes.composeNote(p.product_id),
-          };
-        }),
-    };
+    const payload = buildKotPayload(
+      selectedTable,
+      products.filter((p) => (quantities[p.product_id] ?? 0) > 0),
+    );
 
     setIsSubmittingKot(true);
     try {
       const response = await storeKotOrder(token, payload);
+      rememberWaiterOrderId(
+        selectedTable.booking?.id,
+        response.waiter_order_id,
+      );
 
       setLocalBookings((prev) => ({
         ...prev,

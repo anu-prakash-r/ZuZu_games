@@ -78,6 +78,12 @@ export interface KotDetailsItem {
   note: string | null;
   productId: number | null;
   variationId: number | null;
+  rowId: number | null;
+}
+
+export interface KotDetailsBundle {
+  items: KotDetailsItem[];
+  waiterOrderId: number | null;
 }
 
 interface KotDetailsApiRaw {
@@ -105,9 +111,10 @@ function firstString(...values: unknown[]): string | null {
 function normalizeKotLine(raw: unknown): KotDetailsItem | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
-  const nested = ["variation", "product", "item"].reduce<
-    Record<string, unknown> | null
-  >(
+  const nested = ["variation", "product", "item"].reduce<Record<
+    string,
+    unknown
+  > | null>(
     (acc, key) =>
       acc ??
       (r[key] && typeof r[key] === "object"
@@ -145,9 +152,63 @@ function normalizeKotLine(raw: unknown): KotDetailsItem | null {
     toNum(nested?.product_id) ??
     toNum(nested?.id);
   const variationId =
-    toNum(r.variation_id) ?? toNum(r.variationId) ?? toNum(nested?.variation_id);
+    toNum(r.variation_id) ??
+    toNum(r.variationId) ??
+    toNum(nested?.variation_id);
+  const rawRowId =
+    toNum(r.waiter_order_item_id) ??
+    toNum(r.order_item_id) ??
+    toNum(r.item_id) ??
+    toNum(r.sell_line_id) ??
+    toNum(r.id);
+  const rowId = rawRowId !== null && rawRowId !== productId ? rawRowId : null;
   if (!name && qty <= 0) return null;
-  return { name: name ?? "Item", qty, unitPrice, totalPrice, note, productId, variationId };
+  return {
+    name: name ?? "Item",
+    qty,
+    unitPrice,
+    totalPrice,
+    note,
+    productId,
+    variationId,
+    rowId,
+  };
+}
+
+const WAITER_ORDER_ID_KEYS = ["waiter_order_id", "waiterOrderId"];
+
+function findWaiterOrderId(node: unknown, depth = 0): number | null {
+  if (depth > 6 || node === null || node === undefined) return null;
+  if (Array.isArray(node)) {
+    for (const el of node) {
+      const found = findWaiterOrderId(el, depth + 1);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (typeof node !== "object") return null;
+  const obj = node as Record<string, unknown>;
+
+  for (const key of WAITER_ORDER_ID_KEYS) {
+    const n = toNum(obj[key]);
+    if (n !== null) return n;
+  }
+
+  const nested = obj.waiter_order;
+  if (nested && typeof nested === "object") {
+    const n =
+      toNum((nested as Record<string, unknown>).waiter_order_id) ??
+      toNum((nested as Record<string, unknown>).id);
+    if (n !== null) return n;
+  }
+
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") {
+      const found = findWaiterOrderId(value, depth + 1);
+      if (found !== null) return found;
+    }
+  }
+  return null;
 }
 
 const KOT_NESTED_KEYS = [
@@ -160,7 +221,11 @@ const KOT_NESTED_KEYS = [
   "kots",
 ];
 
-function collectKotItems(node: unknown, out: KotDetailsItem[], depth = 0): void {
+function collectKotItems(
+  node: unknown,
+  out: KotDetailsItem[],
+  depth = 0,
+): void {
   if (depth > 5 || node === null || node === undefined) return;
 
   if (Array.isArray(node)) {
@@ -207,12 +272,19 @@ export function extractKotDetailsItems(payload: unknown): KotDetailsItem[] {
   return out;
 }
 
-/** GET `/kot/details?table_id=<id>&booking_id=<id>` — food details for a room. */
-export async function fetchKotDetails(
+/** Same payload, plus the parent `waiter_order_id` the items belong to. */
+export function extractKotDetailsBundle(payload: unknown): KotDetailsBundle {
+  return {
+    items: extractKotDetailsItems(payload),
+    waiterOrderId: findWaiterOrderId(payload),
+  };
+}
+
+async function fetchKotDetailsPayload(
   token: string,
   tableId: number,
   bookingId: number,
-): Promise<KotDetailsItem[]> {
+): Promise<unknown> {
   const res = await authFetch(
     `/kot/details?table_id=${tableId}&booking_id=${bookingId}`,
     token,
@@ -231,7 +303,27 @@ export async function fetchKotDetails(
       raw?.message || `Failed to load KOT details (${res.status}).`,
     );
   }
+  return data;
+}
+
+/** GET `/kot/details?table_id=<id>&booking_id=<id>` — food details for a room. */
+export async function fetchKotDetails(
+  token: string,
+  tableId: number,
+  bookingId: number,
+): Promise<KotDetailsItem[]> {
+  const data = await fetchKotDetailsPayload(token, tableId, bookingId);
   return extractKotDetailsItems(data);
+}
+
+/** Same request, keeping the order id alongside the lines. */
+export async function fetchKotDetailsBundle(
+  token: string,
+  tableId: number,
+  bookingId: number,
+): Promise<KotDetailsBundle> {
+  const data = await fetchKotDetailsPayload(token, tableId, bookingId);
+  return extractKotDetailsBundle(data);
 }
 
 export async function storeKotOrder(
