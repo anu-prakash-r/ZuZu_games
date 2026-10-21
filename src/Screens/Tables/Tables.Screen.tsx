@@ -5,15 +5,9 @@ import {
   type KotDetailsItem,
   type KotStorePayload,
 } from "@/api/kot";
-import { productPrice, type Product } from "@/api/products";
+import { fetchProducts, productPrice, type Product } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
-import {
-  fetchWaiterOrderItems,
-  storeWaiterOrderItems,
-  type WaiterOrderItemInput,
-} from "@/api/waiterOrderItems";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
-import EditItemsModal from "@/components/Tables/EditItemsModal";
 import MenuModal from "@/components/Tables/MenuModal";
 import NoteModal from "@/components/Tables/NoteModal";
 import TableActionsModal from "@/components/Tables/TableActionsModal";
@@ -23,10 +17,10 @@ import { useCategories } from "@/hooks/useCategories";
 import { useItemNotes } from "@/hooks/useItemNotes";
 import { useProducts } from "@/hooks/useProducts";
 import {
+  isValidIPv4,
+  loadPrinterConfig,
   printBill,
   printServerKot,
-  loadPrinterConfig,
-  isValidIPv4,
 } from "@/utils/printer";
 import {
   formatElapsed,
@@ -37,7 +31,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -132,9 +125,7 @@ export default function TablesScreen() {
   const [actionTable, setActionTable] = useState<ApiTable | null>(null);
   const [isClosingTable, setIsClosingTable] = useState(false);
   const [isDeletingItems, setIsDeletingItems] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editLines, setEditLines] = useState<WaiterOrderItemInput[]>([]);
-  const [isLoadingEditLines, setIsLoadingEditLines] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [kotDetails, setKotDetails] = useState<KotDetailsItem[]>([]);
   const [isLoadingKotDetails, setIsLoadingKotDetails] = useState(false);
@@ -155,6 +146,7 @@ export default function TablesScreen() {
     setQuantities({});
     setMenuSearch("");
     setSelectedCategoryId(null);
+    setIsEditMode(false);
     notes.reset();
     setIsNoteModalOpen(false);
     setIsModalOpen(true);
@@ -192,29 +184,29 @@ export default function TablesScreen() {
     loadKotDetails(table);
   };
 
-  const extractWaiterLines = (res: any): WaiterOrderItemInput[] => {
-    const candidates = [
-      res?.data,
-      res?.data?.items,
-      res?.data?.waiter_order_items,
-      res?.items,
-      res?.waiter_order_items,
-    ];
-    for (const c of candidates) {
-      if (Array.isArray(c) && c.length > 0 && typeof c[0] === "object") {
-        return c
-          .filter(
-            (l: any) =>
-              l && l.id != null && l.waiter_order_id != null && l.qty != null,
-          )
-          .map((l: any) => ({
-            id: Number(l.id),
-            waiter_order_id: Number(l.waiter_order_id),
-            qty: Number(l.qty),
-          }));
+  const buildEditPrefill = (
+    lines: KotDetailsItem[],
+    catalogue: Product[],
+  ): Record<number, number> => {
+    const seed: Record<number, number> = {};
+    for (const item of lines) {
+      if (item.qty <= 0) continue;
+
+      const match =
+        catalogue.find(
+          (p) => item.productId != null && p.product_id === item.productId,
+        ) ??
+        catalogue.find(
+          (p) =>
+            p.product_name.trim().toLowerCase() ===
+            item.name.trim().toLowerCase(),
+        );
+
+      if (match) {
+        seed[match.product_id] = (seed[match.product_id] ?? 0) + item.qty;
       }
     }
-    return [];
+    return seed;
   };
 
   const handleDeleteItems = async () => {
@@ -227,17 +219,6 @@ export default function TablesScreen() {
 
     setIsDeletingItems(true);
     try {
-      const res = await fetchWaiterOrderItems(token, bookingId);
-      const lines = extractWaiterLines(res);
-
-      if (lines.length === 0) {
-        return;
-      }
-
-      await storeWaiterOrderItems(token, bookingId, {
-        items: lines.map((l) => ({ ...l, qty: 0 })),
-      });
-
       setIsActionModalOpen(false);
       setActionTable(null);
       await loadTables(false);
@@ -252,37 +233,29 @@ export default function TablesScreen() {
   const handleOpenEditItems = async () => {
     if (!actionTable || !token) return;
 
-    const bookingId = actionTable.booking?.id;
-    if (bookingId === null || bookingId === undefined) {
-      return;
-    }
+    const bookingId = actionTable.booking?.id ?? null;
 
-    setIsLoadingEditLines(true);
-    setEditLines([]);
+    // The sheet's cached lines are reused when present; if the fetch is still
+    // in flight (or failed) we pull them here so the picker isn't blank.
+    const lines =
+      kotDetails.length > 0 || bookingId === null
+        ? kotDetails
+        : await fetchKotDetails(token, actionTable.id, bookingId).catch(
+            () => [] as KotDetailsItem[],
+          );
+
+    const catalogue =
+      products.length > 0
+        ? products
+        : await fetchProducts(token).catch(() => [] as Product[]);
+
+    setSelectedTable(actionTable);
+    setQuantities(buildEditPrefill(lines, catalogue));
+    setMenuSearch("");
+    setSelectedCategoryId(null);
     setIsActionModalOpen(false);
-    setIsEditModalOpen(true);
-    try {
-      const res = await fetchWaiterOrderItems(token, bookingId);
-      const lines = extractWaiterLines(res);
-      setEditLines(lines);
-      if (lines.length === 0) {
-        setIsEditModalOpen(false);
-      }
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to load the items.";
-      setIsEditModalOpen(false);
-    } finally {
-      setIsLoadingEditLines(false);
-    }
-  };
-
-  const changeEditQty = (index: number, delta: number) => {
-    setEditLines((prev) =>
-      prev.map((l, i) =>
-        i === index ? { ...l, qty: Math.max(0, l.qty + delta) } : l,
-      ),
-    );
+    setIsEditMode(true);
+    setIsModalOpen(true);
   };
 
   const handleSaveEditItems = async () => {
@@ -291,18 +264,58 @@ export default function TablesScreen() {
     const bookingId = actionTable.booking?.id;
     if (bookingId === null || bookingId === undefined) return;
 
+    const selected = products.filter(
+      (p) => (quantities[p.product_id] ?? 0) > 0,
+    );
+    if (selected.length === 0) {
+      return;
+    }
+
     setIsSavingEdit(true);
     try {
-      await storeWaiterOrderItems(token, bookingId, { items: editLines });
-      setIsEditModalOpen(false);
-      setEditLines([]);
+      const locationId =
+        actionTable.location_id ?? locations[0]?.location_id ?? 1;
+
+      const payload: KotStorePayload = {
+        location_id: locationId,
+        res_table_id: actionTable.id,
+        booking_id: bookingId,
+        contact_id: actionTable.booking?.contact_id ?? null,
+        res_waiter_id: null,
+        order_type: "separate",
+        chair_no: "1",
+        staff_note: null,
+        types_of_service_id: null,
+        products: selected.map((p) => {
+          const price = productPrice(p);
+          return {
+            product_id: p.product_id,
+            variation_id: p.variation_id,
+            quantity: quantities[p.product_id] ?? 0,
+            unit_price: price,
+            unit_price_inc_tax: price,
+            item_tax: 0,
+            tax_id: null,
+            sell_line_note: notes.composeNote(p.product_id),
+          };
+        }),
+      };
+
+      await storeKotOrder(token, payload);
+
+      setIsModalOpen(false);
+      setIsEditMode(false);
+      setQuantities({});
       await loadTables(false);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to save the items.";
     } finally {
       setIsSavingEdit(false);
     }
+  };
+
+  const closeMenuModal = () => {
+    setIsModalOpen(false);
+    setIsEditMode(false);
   };
 
   const handleCloseTable = async () => {
@@ -345,10 +358,6 @@ export default function TablesScreen() {
     const config = await loadPrinterConfig();
     const host = config.billingIp;
     if (!isValidIPv4(host)) {
-      Alert.alert(
-        "Bill not printed",
-        "No billing printer IP is configured. Set one on the KOT tab.",
-      );
       return;
     }
 
@@ -379,7 +388,6 @@ export default function TablesScreen() {
     } catch (e) {
       const printMsg =
         e instanceof Error ? e.message : "Failed to print the bill.";
-      Alert.alert("Print Failed", printMsg);
     }
   };
 
@@ -594,7 +602,7 @@ export default function TablesScreen() {
 
       <MenuModal
         visible={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={closeMenuModal}
         tableName={selectedTable?.name}
         isOccupied={selectedIsOccupied}
         products={products}
@@ -614,7 +622,9 @@ export default function TablesScreen() {
         totalItems={totalItems}
         totalPrice={calculateTotal()}
         onPrintKot={() => setIsNoteModalOpen(true)}
-        isSubmittingKot={isSubmittingKot}
+        isSubmittingKot={isSubmittingKot || isSavingEdit}
+        isEditMode={isEditMode}
+        onSaveEdit={handleSaveEditItems}
       />
 
       <NoteModal
@@ -653,17 +663,6 @@ export default function TablesScreen() {
         onEditItems={handleOpenEditItems}
         onCloseTable={handleCloseTable}
         onDeleteItems={handleDeleteItems}
-      />
-
-      <EditItemsModal
-        visible={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        tableName={actionTable?.name}
-        lines={editLines}
-        isLoading={isLoadingEditLines}
-        isSaving={isSavingEdit}
-        onQtyChange={changeEditQty}
-        onSave={handleSaveEditItems}
       />
     </SafeAreaView>
   );

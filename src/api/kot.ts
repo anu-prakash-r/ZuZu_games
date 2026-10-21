@@ -76,6 +76,8 @@ export interface KotDetailsItem {
   unitPrice: number | null;
   totalPrice: number | null;
   note: string | null;
+  productId: number | null;
+  variationId: number | null;
 }
 
 interface KotDetailsApiRaw {
@@ -137,8 +139,15 @@ function normalizeKotLine(raw: unknown): KotDetailsItem | null {
     r.kot_note,
     nested?.note,
   );
+  const productId =
+    toNum(r.product_id) ??
+    toNum(r.productId) ??
+    toNum(nested?.product_id) ??
+    toNum(nested?.id);
+  const variationId =
+    toNum(r.variation_id) ?? toNum(r.variationId) ?? toNum(nested?.variation_id);
   if (!name && qty <= 0) return null;
-  return { name: name ?? "Item", qty, unitPrice, totalPrice, note };
+  return { name: name ?? "Item", qty, unitPrice, totalPrice, note, productId, variationId };
 }
 
 const KOT_NESTED_KEYS = [

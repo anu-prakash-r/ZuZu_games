@@ -34,6 +34,8 @@ interface MenuModalProps {
   totalPrice: number;
   onPrintKot: () => void;
   isSubmittingKot: boolean;
+  isEditMode?: boolean;
+  onSaveEdit?: () => void;
 }
 
 export default function MenuModal({
@@ -56,6 +58,8 @@ export default function MenuModal({
   totalPrice,
   onPrintKot,
   isSubmittingKot,
+  isEditMode = false,
+  onSaveEdit,
 }: MenuModalProps) {
   const filteredProducts = products.filter(
     (p) =>
@@ -89,7 +93,11 @@ export default function MenuModal({
           <View className="flex-row items-center justify-between mb-2 pb-1">
             <View>
               <Text className="text-xl font-extrabold text-[#35116B]">
-                {isOccupied ? `Add Items — ${tableName}` : `Book ${tableName}`}
+                {isEditMode
+                  ? `Edit Items — ${tableName}`
+                  : isOccupied
+                    ? `Add Items — ${tableName}`
+                    : `Book ${tableName}`}
               </Text>
             </View>
 
@@ -272,7 +280,7 @@ export default function MenuModal({
             </View>
           </ScrollView>
 
-          {totalItems > 0 ? (
+          {(totalItems > 0 || isEditMode) && (
             <View className="pt-3 border-t mb-3 border-slate-100 flex-row items-center justify-between">
               <TouchableOpacity
                 onPress={onClose}
@@ -293,19 +301,31 @@ export default function MenuModal({
                 </View>
 
                 <TouchableOpacity
-                  onPress={onPrintKot}
+                  onPress={isEditMode ? onSaveEdit : onPrintKot}
                   activeOpacity={0.85}
-                  disabled={totalItems === 0 || isSubmittingKot}
+                  disabled={
+                    isSubmittingKot || (!isEditMode && totalItems === 0)
+                  }
                   className="bg-emerald-500 px-5 py-3.5 rounded-2xl flex-row items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   <Text className="text-white font-bold text-sm">
-                    {isSubmittingKot ? "Sending..." : "Print KOT"}
+                    {isEditMode
+                      ? isSubmittingKot
+                        ? "Saving..."
+                        : "Save Changes"
+                      : isSubmittingKot
+                        ? "Sending..."
+                        : "Print KOT"}
                   </Text>
-                  <AntDesign name="printer" size={18} color="#FFFFFF" />
+                  {isEditMode ? (
+                    <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                  ) : (
+                    <AntDesign name="printer" size={18} color="#FFFFFF" />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
-          ) : null}
+          )}
         </View>
       </View>
     </Modal>
