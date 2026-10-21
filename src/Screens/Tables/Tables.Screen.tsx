@@ -72,13 +72,6 @@ function parseApiDate(value: string | null | undefined): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-/**
- * Live session charges for an open booking.
- *
- * Recomputes every 30s so the room charge ticks up while the modal is open.
- * These figures are printed on the thermal receipt only — the server never
- * sees them.
- */
 function SessionChargeSummary({
   booking,
   items,
@@ -211,7 +204,6 @@ export default function TablesScreen() {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTable, setDetailTable] = useState<ApiTable | null>(null);
   const [selectedTable, setSelectedTable] = useState<ApiTable | null>(null);
   const [customerName, setCustomerName] = useState("");
@@ -697,11 +689,15 @@ export default function TablesScreen() {
           />
         }
       >
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-            Occupied Rooms ({occupiedTables.length})
-          </Text>
-        </View>
+        {occupiedTables.length > 0 && (
+          <>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                Occupied Rooms ({occupiedTables.length})
+              </Text>
+            </View>
+          </>
+        )}
 
         {isLoadingTables ? (
           <View className="flex-row flex-wrap justify-between gap-y-4">
@@ -724,17 +720,22 @@ export default function TablesScreen() {
             </TouchableOpacity>
           </View>
         ) : occupiedTables.length === 0 ? (
-          <View className="items-center py-16 gap-1.5">
-            <Ionicons
-              name="game-controller-outline"
-              size={30}
-              color="#CBD5E1"
-            />
-            <Text className="text-slate-500 font-bold text-sm">
-              No occupied rooms
+          <View className="items-center py-10 px-6">
+            <View className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 items-center justify-center mb-4">
+              <Ionicons
+                name="game-controller-outline"
+                size={30}
+                color="#35116B"
+              />
+            </View>
+
+            <Text className="text-slate-800 font-bold text-base mb-1">
+              No Active Rooms Yet
             </Text>
-            <Text className="text-slate-400 text-xs">
-              All rooms are currently free.
+
+            <Text className="text-slate-500 text-xs text-center leading-5 max-w-[240px]">
+              Your booked game rooms will appear here. Book a room to get
+              started!
             </Text>
           </View>
         ) : (

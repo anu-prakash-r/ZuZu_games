@@ -1,17 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   Text,
   StatusBar,
-  TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,14 +25,7 @@ function parseApiDate(value: string | null | undefined): number | null {
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const [createTableVisible, setCreateTableVisible] = useState(false);
-  const [tableNumber, setTableNumber] = useState("");
-  const [seatCount, setSeatCount] = useState("4");
-  const [tableType, setTableType] = useState("Standard");
-  const [createdTables, setCreatedTables] = useState<
-    { id: string; tableNo: string; seats: number; type: string }[]
-  >([]);
-  const [tableError, setTableError] = useState("");
+
   const { tables, isLoading: tablesLoading } = useTables();
   const [, setTick] = useState(0);
 
@@ -59,7 +47,6 @@ export default function HomeScreen() {
   const activeSessions = tables.filter((t) => !!t.booking);
   const MAX_HOME_SESSIONS = 3;
   const recentSessions = activeSessions.slice(0, MAX_HOME_SESSIONS);
-  const hiddenSessionCount = activeSessions.length - recentSessions.length;
 
   const getElapsedTime = (bookedAt: number | null) => {
     if (!bookedAt) return "Just now";
@@ -74,63 +61,17 @@ export default function HomeScreen() {
     return `${hours}h ${mins}m`;
   };
 
-  const handleCreateTable = () => {
-    const number = tableNumber.trim();
-    const seats = Number(seatCount);
-
-    if (!number) {
-      setTableError("Please enter a table number.");
-      return;
-    }
-
-    if (!/^\d+$/.test(number) || Number(number) < 1) {
-      setTableError("Enter a valid positive table number.");
-      return;
-    }
-
-    const duplicate = createdTables.some((table) => table.tableNo === number);
-
-    const existingTable = tables.some(
-      (table) =>
-        table.name.trim() === number || table.name.trim() === `0${number}`,
-    );
-
-    if (duplicate || existingTable) {
-      setTableError("This table number already exists.");
-      return;
-    }
-
-    if (!Number.isInteger(seats) || seats < 1 || seats > 50) {
-      setTableError("Enter between 1 and 50 seats.");
-      return;
-    }
-
-    setCreatedTables((previous) => [
-      ...previous,
-      {
-        id: Date.now().toString(),
-        tableNo: number,
-        seats,
-        type: tableType,
-      },
-    ]);
-
-    setTableNumber("");
-    setSeatCount("4");
-    setTableType("Standard");
-    setTableError("");
-    setCreateTableVisible(false);
-  };
-
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7FB" />
-      <View className="px-5 pt-4 pb-3 border-b border-slate-200">
+      <View className="px-5 pt-4 pb-3 border-b border-slate-200 bg-white">
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center space-x-3">
-            <View className="w-11 h-11 rounded-2xl bg-[#35116B] items-center justify-center shadow-md shadow-[#35116B]/30">
-              <Ionicons name="game-controller" size={20} color="#fff" />
-            </View>
+          <View className="flex-row items-center">
+            <Image
+              source={require("@/assets/images/fav.png")}
+              className="w-10 h-10"
+              resizeMode="contain"
+            />
 
             <View className="justify-center ml-3">
               <View className="flex-row items-center space-x-1.5">
@@ -205,22 +146,24 @@ export default function HomeScreen() {
           </View>
           <View className="flex-row items-center justify-between mb-2 px-1">
             <Text className="text-slate-500 text-base font-extrabold tracking-tight">
-              Active Room Sessions
+              Active Rooms
             </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                router.push("/tables");
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="View all active table sessions"
-              className="flex-row items-center gap-1.5"
-            >
-              <Text className="text-[#35116B] text-sm font-bold">View All</Text>
-
-              <Ionicons name="arrow-forward" size={16} color="#35116B" />
-            </TouchableOpacity>
+            {activeSessions.length > 0 && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  router.push("/tables");
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="View all active table sessions"
+                className="flex-row items-center gap-1.5"
+              >
+                <Text className="text-[#35116B] text-sm font-bold">
+                  View All
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color="#35116B" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <View className="px-4 py-3 gap-4">
@@ -232,17 +175,20 @@ export default function HomeScreen() {
               </Text>
             </View>
           ) : activeSessions.length === 0 ? (
-            <View className="items-center py-10 gap-1.5">
-              <Ionicons
-                name="game-controller-outline"
-                size={28}
-                color="#CBD5E1"
-              />
-              <Text className="text-slate-500 font-bold text-sm">
-                No active sessions
+            <View className="items-center py-10 px-6">
+              <View className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 items-center justify-center mb-4">
+                <Ionicons
+                  name="game-controller-outline"
+                  size={30}
+                  color="#35116B"
+                />
+              </View>
+              <Text className="text-slate-800 font-bold text-base mb-1">
+                No Active Rooms Yet
               </Text>
-              <Text className="text-slate-400 text-xs text-center px-8">
-                Booked rooms will appear here.
+              <Text className="text-slate-500 text-xs text-center leading-5 max-w-[240px]">
+                Your booked game rooms will appear here. Book a room to get
+                started!
               </Text>
             </View>
           ) : (
@@ -343,173 +289,6 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
-
-      <Modal
-        visible={createTableVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setCreateTableVisible(false)}
-      >
-        <KeyboardAvoidingView
-          className="flex-1 justify-center items-center px-5"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <Pressable
-            className="absolute inset-0 bg-black/60"
-            onPress={() => setCreateTableVisible(false)}
-          />
-
-          <View className="w-full max-w-md bg-white rounded-[28px] overflow-hidden shadow-2xl border border-slate-100">
-            <View className="bg-[#35116B] px-6 py-5">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-3.5">
-                  <View className="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 items-center justify-center">
-                    <Ionicons name="grid-sharp" size={22} color="#FFD700" />
-                  </View>
-                  <View>
-                    <Text className="text-white text-lg font-black tracking-tight">
-                      Create New Room
-                    </Text>
-                    <Text className="text-purple-200/90 text-xs font-medium mt-0.5">
-                      Configure Room details for your cafe
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => setCreateTableVisible(false)}
-                  activeOpacity={0.7}
-                  className="w-9 h-9 rounded-full bg-white/10 items-center justify-center"
-                >
-                  <Ionicons name="close" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View className="p-6">
-              <View className="mb-4">
-                <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-2">
-                  Room Number
-                </Text>
-                <View className="flex-row items-center border border-slate-200/80 rounded-2xl px-4 h-14 bg-slate-50/50">
-                  <Ionicons name="pricetag-outline" size={18} color="#35116B" />
-                  <TextInput
-                    className="flex-1 ml-3 text-slate-900 font-semibold text-base"
-                    placeholder="e.g. 10 or T-04"
-                    placeholderTextColor="#94A3B8"
-                    value={tableNumber}
-                    onChangeText={(value) => {
-                      setTableNumber(value);
-                      setTableError("");
-                    }}
-                    maxLength={6}
-                  />
-                </View>
-              </View>
-
-              <View className="mb-5">
-                <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-2">
-                  Number of Seats
-                </Text>
-                <View className="flex-row items-center border border-slate-200/80 rounded-2xl px-4 h-14 bg-slate-50/50">
-                  <Ionicons name="people-outline" size={19} color="#35116B" />
-                  <TextInput
-                    className="flex-1 ml-3 text-slate-900 font-semibold text-base"
-                    placeholder="e.g. 4"
-                    placeholderTextColor="#94A3B8"
-                    value={seatCount}
-                    onChangeText={setSeatCount}
-
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                </View>
-              </View>
-
-              <View className="mb-6">
-                <Text className="text-slate-800 text-xs font-bold uppercase tracking-wider mb-3">
-                  Table Category
-                </Text>
-                <View className="flex-row gap-2.5">
-                  {[
-                    { id: "Standard", icon: "restaurant-outline" },
-                    { id: "VIP", icon: "star-outline" },
-                    { id: "Outdoor", icon: "sunny-outline" },
-                  ].map((item) => {
-                    const selected = tableType === item.id;
-
-                    return (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => setTableType(item.id)}
-
-                        className={`flex-1 py-3.5 px-2 rounded-2xl border items-center justify-center ${
-                          selected
-                            ? "bg-purple-50/80 border-[#35116B]"
-                            : "bg-white border-slate-200/80"
-                        }`}
-                      >
-                        <Ionicons
-                          name={item.icon as any}
-                          size={20}
-                          color={selected ? "#35116B" : "#64748B"}
-                        />
-                        <Text
-                          className={`text-xs font-bold mt-1.5 ${
-                            selected ? "text-[#35116B]" : "text-slate-600"
-                          }`}
-                        >
-                          {item.id}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {tableError ? (
-                <View className="flex-row items-center bg-red-50 border border-red-200/60 p-3 rounded-xl mb-4 gap-2">
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={18}
-                    color="#DC2626"
-                  />
-                  <Text className="text-red-700 text-xs font-medium flex-1">
-                    {tableError}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View className="flex-row gap-3 pt-1">
-                <TouchableOpacity
-                  onPress={() => {
-                    setCreateTableVisible(false);
-                    setTableError("");
-                  }}
-                  activeOpacity={0.75}
-                  className="flex-1 h-12 rounded-2xl border border-slate-200 bg-slate-50 items-center justify-center"
-                >
-                  <Text className="text-slate-700 font-bold text-sm">
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleCreateTable}
-                  activeOpacity={0.85}
-                  className="flex-1 h-12 rounded-2xl bg-[#35116B] items-center justify-center flex-row gap-2 shadow-md"
-                >
-                  <Ionicons name="add-circle" size={19} color="#FFFFFF" />
-                  <Text className="text-white font-bold text-sm tracking-wide">
-                    Create Room
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </SafeAreaView>
   );
 }
