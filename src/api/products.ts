@@ -27,7 +27,9 @@ export async function fetchProducts(token: string): Promise<Product[]> {
     throw new Error(`Failed to load products (server returned ${res.status}).`);
   }
   if (!res.ok || data?.status === false) {
-    throw new Error(data?.message || `Failed to load products (${res.status}).`);
+    throw new Error(
+      data?.message || `Failed to load products (${res.status}).`,
+    );
   }
   return data?.data ?? [];
 }
@@ -36,4 +38,36 @@ export async function fetchProducts(token: string): Promise<Product[]> {
 export function productPrice(p: Product): number {
   const n = parseFloat(p.unit_price_inc_tax);
   return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  short_code?: string;
+  description?: string;
+  parent_id?: number;
+}
+
+interface CategoriesApiRaw {
+  status?: boolean;
+  message?: string;
+  data?: Category[];
+}
+
+export async function fetchCategories(token: string): Promise<Category[]> {
+  const res = await authFetch("/categories", token);
+  let data: CategoriesApiRaw | null = null;
+  try {
+    data = (await res.json()) as CategoriesApiRaw;
+  } catch {
+    throw new Error(
+      `Failed to load categories (server returned ${res.status}).`,
+    );
+  }
+  if (!res.ok || data?.status === false) {
+    throw new Error(
+      data?.message || `Failed to load categories (${res.status}).`,
+    );
+  }
+  return data?.data ?? [];
 }

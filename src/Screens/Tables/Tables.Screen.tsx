@@ -21,6 +21,7 @@ import { fetchTables, type ApiTable, type TableBooking } from "@/api/tables";
 import ProductItemSkeleton from "@/components/Loader/ProductItemSkeleton";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
 import { useAuth } from "@/context/AuthContext";
+import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
 import {
   printServerKot,
@@ -216,6 +217,9 @@ export default function TablesScreen() {
   const [customerName, setCustomerName] = useState("");
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [menuSearch, setMenuSearch] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    null,
+  );
   const [isSubmittingKot, setIsSubmittingKot] = useState(false);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [expandedNotePid, setExpandedNotePid] = useState<number | null>(null);
@@ -239,11 +243,14 @@ export default function TablesScreen() {
     refetch: refetchProducts,
   } = useProducts(isModalOpen);
 
+  const { categories, refetch: refetchCategories } = useCategories(isModalOpen);
+
   const handleTablePress = (table: ApiTable) => {
     setSelectedTable(table);
     setCustomerName(table.booking?.contact_name?.trim() ?? "");
     setQuantities({});
     setMenuSearch("");
+    setSelectedCategoryId(null);
     setItemNoteText({});
     setExpandedNotePid(null);
     setIsNoteModalOpen(false);
@@ -529,8 +536,16 @@ export default function TablesScreen() {
     (p) => composeNote(p.product_id) !== null,
   );
 
-  const filteredProducts = products.filter((p) =>
-    p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
+  const filteredProducts = products.filter(
+    (p) =>
+      (selectedCategoryId === null ||
+        p.category_id === selectedCategoryId ||
+        p.sub_category_id === selectedCategoryId) &&
+      p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
+  );
+
+  const categoryChips = categories.filter((c) =>
+    products.some((p) => p.category_id === c.id || p.sub_category_id === c.id),
   );
 
   const visibleProducts = [...filteredProducts].sort(
@@ -912,6 +927,44 @@ export default function TablesScreen() {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {categoryChips.length > 0 &&
+              !productsLoading &&
+              !productsError ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardDismissMode="on-drag"
+                  contentContainerStyle={{ gap: 8, paddingTop: 12 }}
+                >
+                  {[
+                    { id: null, name: "All" },
+                    ...categoryChips.map((c) => ({ id: c.id, name: c.name })),
+                  ].map((chip) => {
+                    const active = selectedCategoryId === chip.id;
+                    return (
+                      <TouchableOpacity
+                        key={chip.id === null ? "all" : `cat-${chip.id}`}
+                        onPress={() => setSelectedCategoryId(chip.id)}
+                        activeOpacity={0.8}
+                        className={`px-3.5 py-2 rounded-full border ${
+                          active
+                            ? "bg-[#35116B] border-[#35116B]"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[11px] font-bold ${
+                            active ? "text-white" : "text-slate-600"
+                          }`}
+                        >
+                          {chip.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
             </View>
 
             <ScrollView
@@ -936,7 +989,10 @@ export default function TablesScreen() {
                     />
 
                     <TouchableOpacity
-                      onPress={refetchProducts}
+                      onPress={() => {
+                        refetchProducts();
+                        refetchCategories();
+                      }}
                       activeOpacity={0.8}
                       className="bg-[#35116B] px-5 py-2.5 rounded-xl mt-1"
                     >
@@ -955,7 +1011,9 @@ export default function TablesScreen() {
                     <Text className="text-slate-400 text-xs font-semibold">
                       {products.length === 0
                         ? "No items available right now."
-                        : "No items match your search."}
+                        : selectedCategoryId !== null
+                          ? "No items in this category."
+                          : "No items match your search."}
                     </Text>
                   </View>
                 ) : (
