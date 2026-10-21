@@ -23,7 +23,7 @@ export function useCategories(enabled = true): UseCategoriesResult {
     try {
       const data = await fetchCategories(token);
       console.log("Categories list:", JSON.stringify(data, null, 2));
-      setCategories(data);
+      setCategories(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load categories.");
     } finally {

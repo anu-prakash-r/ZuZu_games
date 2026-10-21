@@ -544,9 +544,11 @@ export default function TablesScreen() {
       p.product_name.toLowerCase().includes(menuSearch.trim().toLowerCase()),
   );
 
-  const categoryChips = categories.filter((c) =>
+  const matchedChips = (categories ?? []).filter((c) =>
     products.some((p) => p.category_id === c.id || p.sub_category_id === c.id),
   );
+
+  const categoryChips = matchedChips.length > 0 ? matchedChips : categories;
 
   const visibleProducts = [...filteredProducts].sort(
     (a, b) =>
@@ -939,12 +941,19 @@ export default function TablesScreen() {
                 >
                   {[
                     { id: null, name: "All" },
-                    ...categoryChips.map((c) => ({ id: c.id, name: c.name })),
-                  ].map((chip) => {
+                    ...categoryChips.map((c) => ({
+                      id: c.id ?? null,
+                      name: c.name,
+                    })),
+                  ].map((chip, idx) => {
                     const active = selectedCategoryId === chip.id;
                     return (
                       <TouchableOpacity
-                        key={chip.id === null ? "all" : `cat-${chip.id}`}
+                        key={
+                          chip.id === null && idx === 0
+                            ? "all"
+                            : `cat-${chip.id ?? idx}`
+                        }
                         onPress={() => setSelectedCategoryId(chip.id)}
                         activeOpacity={0.8}
                         className={`px-3.5 py-2 rounded-full border ${

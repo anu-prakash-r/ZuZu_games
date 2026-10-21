@@ -41,17 +41,30 @@ export function productPrice(p: Product): number {
 }
 
 export interface Category {
-  id: number;
+  id?: number;
+  category_id?: number;
   name: string;
   short_code?: string;
   description?: string;
   parent_id?: number;
+  slug?: string | null;
 }
 
 interface CategoriesApiRaw {
   status?: boolean;
   message?: string;
-  data?: Category[];
+  data?: unknown;
+}
+
+function unwrapCategoryList(raw: unknown): Category[] {
+  if (Array.isArray(raw)) return raw as Category[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    for (const key of ["categories", "data", "result", "list"]) {
+      if (Array.isArray(obj[key])) return obj[key] as Category[];
+    }
+  }
+  return [];
 }
 
 export async function fetchCategories(token: string): Promise<Category[]> {
@@ -69,5 +82,8 @@ export async function fetchCategories(token: string): Promise<Category[]> {
       data?.message || `Failed to load categories (${res.status}).`,
     );
   }
-  return data?.data ?? [];
+  return unwrapCategoryList(data?.data).map((c) => ({
+    ...c,
+    id: c.category_id ?? c.id,
+  }));
 }
