@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
+  RefreshControl,
   ScrollView,
   Text,
   StatusBar,
@@ -26,8 +27,18 @@ function parseApiDate(value: string | null | undefined): number | null {
 export default function HomeScreen() {
   const { user } = useAuth();
 
-  const { tables, isLoading: tablesLoading } = useTables();
+  const { tables, isLoading: tablesLoading, refetch } = useTables();
+  const [refreshing, setRefreshing] = useState(false);
   const [, setTick] = useState(0);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -93,6 +104,14 @@ export default function HomeScreen() {
         className="flex-1 pt-6"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#35116B"
+            colors={["#35116B"]}
+          />
+        }
       >
         <View className="px-5">
           <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
@@ -167,7 +186,7 @@ export default function HomeScreen() {
           </View>
         </View>
         <View className="px-4 py-3 gap-4">
-          {tablesLoading && activeSessions.length === 0 ? (
+          {tablesLoading && !refreshing && activeSessions.length === 0 ? (
             <View className="items-center py-10 gap-2">
               <Ionicons name="hourglass-outline" size={28} color="#CBD5E1" />
               <Text className="text-slate-400 text-xs font-semibold">
