@@ -1,4 +1,5 @@
 import { authFetch } from "./auth";
+import { API_TIMEOUT_MS } from "./config";
 
 export interface KotProductLine {
   product_id: number;
@@ -330,19 +331,63 @@ export async function storeKotOrder(
   token: string,
   payload: KotStorePayload,
 ): Promise<KotStoreResponse> {
-  const res = await authFetch("/kot/store", token, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  let data: (KotStoreResponse & KotStoreApiRaw) | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let res: Response;
   try {
-    data = (await res.json()) as KotStoreResponse & KotStoreApiRaw;
+    res = await authFetch("/kot/store", token, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(
+        "Sending the KOT timed out. Check your connection and retry.",
+      );
+    }
+    throw new Error(
+      "Could not reach the server. Check your internet connection.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let raw: (KotStoreResponse & KotStoreApiRaw) | null = null;
+  try {
+    raw = (await res.json()) as KotStoreResponse & KotStoreApiRaw;
   } catch {
     throw new Error(`Failed to store KOT (server returned ${res.status}).`);
   }
-  const failed = (data as KotStoreApiRaw | null)?.status === false;
+  const failed = (raw as KotStoreApiRaw | null)?.status === false;
   if (!res.ok || failed) {
-    throw new Error(data?.message || `Failed to store KOT (${res.status}).`);
+    throw new Error(raw?.message || `Failed to store KOT (${res.status}).`);
   }
-  return data as KotStoreResponse;
+
+  // Some deployments wrap the payload in `{ status, message, data: {...} }`.
+  // Unwrap it so callers always get the flat shape — otherwise
+  // `response.kot` / `response.waiter_order_id` come back undefined and the
+  // kitchen print is silently skipped.
+  const nested = raw.data;
+  const body =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? ({
+          ...raw,
+          ...(nested as Partial<KotStoreResponse>),
+        } as KotStoreResponse)
+      : (raw as KotStoreResponse);
+
+  if (
+    body.kot == null &&
+    body.waiter_order_id == null &&
+    body.print_kot == null
+  ) {
+    throw new Error(
+      raw?.message ||
+        `The server returned an unexpected response (HTTP ${res.status}).`,
+    );
+  }
+
+  return body;
 }
