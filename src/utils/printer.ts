@@ -309,6 +309,8 @@ export interface BillTicket {
   extraPersons?: number;
   extraPersonCharge?: number;
   hourlyRate?: number;
+  timeChargePerPerson?: number;
+  persons?: number;
   invoiceNo?: string;
 }
 
@@ -326,7 +328,7 @@ export async function printBill(
     init() +
     alignCenter() +
     doubleSizeOn() +
-    "ZuZu Games Cafe" +
+    "ZuZu Board Game Cafe" +
     LF +
     doubleSizeOff() +
     `Table ${toAscii(ticket.table)}  Order ${toAscii(ticket.orderId)}` +
@@ -349,17 +351,32 @@ export async function printBill(
   }
 
   if (roomCharge > 0 || ticket.elapsed) {
+    const persons = ticket.persons ?? 0;
+    const perPerson = ticket.timeChargePerPerson;
     out +=
       hr() +
       boldOn() +
       "SESSION" +
       LF +
-      boldOff() +
-      row(
+      boldOff();
+
+    if (perPerson != null && persons > 0) {
+      out +=
+        row(`Time ${ticket.elapsed ?? ""}`, "") +
+        row(
+          `Per person (first 30m Rs 50, then Rs 50/30m)`,
+          `Rs ${perPerson}`,
+        ) +
+        row(`Persons x${persons}`, "") +
+        row(`Time charge`, `Rs ${roomCharge}`);
+    } else {
+      out += row(
         `Room ${ticket.elapsed ?? ""} @ Rs ${ticket.hourlyRate ?? HOURLY_RATE}/hr`,
         `Rs ${roomCharge}`,
       );
-    if ((ticket.extraPersons ?? 0) > 0) {
+    }
+
+    if ((ticket.extraPersons ?? 0) > 0 && extraPersonCharge > 0) {
       out += row(
         `Extra persons x${ticket.extraPersons}`,
         `Rs ${extraPersonCharge}`,

@@ -57,7 +57,16 @@ export default function TableCard({
           </View>
 
           <View className="my-1">
-            {override ? (
+            {price != null && price > 0 ? (
+              <View>
+                <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
+                  Total Amount
+                </Text>
+                <Text className="text-white font-black text-2xl tracking-tight">
+                  ₹{price.toFixed(2)}
+                </Text>
+              </View>
+            ) : override ? (
               <View>
                 <View className="flex-row items-center gap-1.5 mb-1">
                   <Ionicons
@@ -74,15 +83,6 @@ export default function TableCard({
                 </Text>
                 <Text className="text-white font-black text-2xl tracking-tight">
                   {override.price}
-                </Text>
-              </View>
-            ) : price != null ? (
-              <View>
-                <Text className="text-purple-300 text-[10px] font-semibold uppercase tracking-wider">
-                  Total Amount
-                </Text>
-                <Text className="text-white font-black text-2xl tracking-tight">
-                  ₹{price.toFixed(2)}
                 </Text>
               </View>
             ) : null}

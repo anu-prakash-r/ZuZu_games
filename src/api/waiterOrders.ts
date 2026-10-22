@@ -7,6 +7,8 @@ export interface WaiterOrderItemRow {
   product_id?: number | null;
   variation_id?: number | null;
   name?: string | null;
+  unitPrice?: number | null;
+  totalPrice?: number | null;
 }
 
 export interface WaiterOrderLine {
@@ -29,8 +31,15 @@ export interface WaiterOrderSnapshot {
 
 interface WaiterOrderApiRaw {
   status?: boolean | string;
+  success?: boolean | string;
   message?: string;
+  msg?: string;
   data?: unknown;
+}
+
+function isFailed(data: ApiPayload | null): boolean {
+  if (!data) return false;
+  return data.status === false || data.success === false;
 }
 
 type ApiPayload = WaiterOrderApiRaw & Record<string, unknown>;
@@ -103,6 +112,18 @@ function toRow(
     product_id: pickNum(r, ["product_id", "productId"]),
     variation_id: pickNum(r, ["variation_id", "variationId"]),
     name: pickString(r, ["name", "product_name", "item_name", "display_name"]),
+    unitPrice: pickNum(r, [
+      "unit_price",
+      "unit_price_inc_tax",
+      "price",
+      "unitPrice",
+    ]),
+    totalPrice: pickNum(r, [
+      "total_price",
+      "line_total",
+      "total",
+      "totalPrice",
+    ]),
   };
 }
 
@@ -199,7 +220,12 @@ function failureMessage(
   raw: string,
   action: string,
 ): string {
-  const message = typeof data?.message === "string" ? data.message.trim() : "";
+  const message =
+    typeof data?.message === "string" && data.message.trim() !== ""
+      ? data.message.trim()
+      : typeof data?.msg === "string" && data.msg.trim() !== ""
+        ? data.msg.trim()
+        : "";
   if (message) return message;
 
   if (status === 500 && /RoomBookingController/.test(raw)) {
@@ -235,6 +261,24 @@ export async function fetchWaiterOrder(
   return extractWaiterOrderSnapshot(data, waiterOrderId);
 }
 
+export async function fetchWaiterOrderItemsByBooking(
+  token: string,
+  bookingId: number,
+): Promise<WaiterOrderSnapshot> {
+  const res = await authFetch(
+    `/room-booking/${bookingId}/get_waiter-order-items`,
+    token,
+  );
+  const raw = await res.text().catch(() => "");
+  const data = parseJson(raw);
+  if (!res.ok || isFailed(data)) {
+    throw new Error(
+      failureMessage(res.status, data, raw, "load the order items"),
+    );
+  }
+  return extractWaiterOrderSnapshot(data);
+}
+
 export async function replaceWaiterOrderItems(
   token: string,
   bookingId: number,
@@ -247,7 +291,7 @@ export async function replaceWaiterOrderItems(
   }));
 
   const res = await authFetch(
-    `/room-booking/${bookingId}/waiter-order-items`,
+    `/room-booking/${bookingId}/update_waiter-order-items`,
     token,
     {
       method: "PUT",
@@ -257,7 +301,7 @@ export async function replaceWaiterOrderItems(
 
   const raw = await res.text().catch(() => "");
   const data = parseJson(raw);
-  if (!res.ok || data?.status === false) {
+  if (!res.ok || isFailed(data)) {
     throw new Error(
       failureMessage(res.status, data, raw, "update the order items"),
     );
@@ -319,9 +363,10 @@ export async function syncWaiterOrderItems(
   );
 
   if (resolved.some((line) => line.rowId === null)) {
-    const snapshot = await fetchWaiterOrder(token, waiterOrderId).catch(
-      () => null,
-    );
+    const snapshot = await fetchWaiterOrderItemsByBooking(
+      token,
+      bookingId,
+    ).catch(() => null);
     if (snapshot) {
       for (const line of resolved) {
         if (line.rowId !== null) continue;

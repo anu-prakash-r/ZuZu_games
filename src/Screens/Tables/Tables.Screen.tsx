@@ -8,6 +8,7 @@ import {
 import { fetchProducts, productPrice, type Product } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
 import {
+  fetchWaiterOrderItemsByBooking,
   replaceWaiterOrderItems,
   syncWaiterOrderItems,
   type WaiterOrderLine,
@@ -100,15 +101,13 @@ export default function TablesScreen() {
       const entries = await Promise.all(
         booked.map(async (t) => {
           try {
-            const bundle = await fetchKotDetailsBundle(
+            const snapshot = await fetchWaiterOrderItemsByBooking(
               token,
-              t.id,
               t.booking!.id,
             );
-            rememberWaiterOrderId(t.booking!.id, bundle.waiterOrderId);
-            const total = bundle.items.reduce(
-              (sum, it) =>
-                sum + (it.totalPrice ?? (it.unitPrice ?? 0) * it.qty),
+            const total = snapshot.items.reduce(
+              (sum, row) =>
+                sum + (row.totalPrice ?? (row.unitPrice ?? 0) * row.qty),
               0,
             );
             return [t.id, total] as const;
@@ -124,7 +123,7 @@ export default function TablesScreen() {
         return next;
       });
     },
-    [token, rememberWaiterOrderId],
+    [token],
   );
 
   const loadTables = useCallback(
@@ -647,6 +646,10 @@ export default function TablesScreen() {
       notes.reset();
       setIsModalOpen(false);
 
+      if (selectedTable.booking?.id != null) {
+        await loadTableTotals([selectedTable]).catch(() => {});
+      }
+
       if (response.kot) {
         const config = await loadPrinterConfig();
         const useLocalIp = isValidIPv4(config.kotIp);
@@ -705,7 +708,7 @@ export default function TablesScreen() {
       <ScrollView
         className="flex-1 px-5 pt-5"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -64,10 +64,18 @@ export default function TableActionsModal({
         onPress={onClose}
       >
         <Pressable
-          className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl max-h-[85%]"
+          className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl max-h-[85%] overflow-hidden"
           onPress={(e) => e.stopPropagation()}
         >
-          <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
+          <ScrollView
+            className="max-h-[85%]"
+            style={{ maxHeight: "100%" }}
+            contentContainerStyle={{ paddingRight: 2 }}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            bounces
+          >
             {table && (
               <>
                 <View className="items-center mb-5">
@@ -126,11 +134,7 @@ export default function TableActionsModal({
                     </Text>
                   ) : (
                     <>
-                      <ScrollView
-                        style={{ maxHeight: 180 }}
-                        showsVerticalScrollIndicator={false}
-                        nestedScrollEnabled
-                      >
+                      <View>
                         {kotDetails.map((item, index) => {
                           const lineTotal =
                             item.totalPrice ?? (item.unitPrice ?? 0) * item.qty;
@@ -167,7 +171,8 @@ export default function TableActionsModal({
                                 <TouchableOpacity
                                   onPress={() => onDeleteItem(index)}
                                   disabled={
-                                    isDeletingItems || deletingItemIndex !== null
+                                    isDeletingItems ||
+                                    deletingItemIndex !== null
                                   }
                                   hitSlop={{
                                     top: 10,
@@ -196,7 +201,7 @@ export default function TableActionsModal({
                             </View>
                           );
                         })}
-                      </ScrollView>
+                      </View>
 
                       <View className="flex-row items-center justify-between pt-2.5 mt-2 border-t border-slate-200/60">
                         <Text className="text-slate-600 text-xs font-bold">
