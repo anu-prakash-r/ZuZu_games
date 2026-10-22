@@ -10,6 +10,7 @@ import { fetchTables, type ApiTable } from "@/api/tables";
 import {
   replaceWaiterOrderItems,
   syncWaiterOrderItems,
+  type WaiterOrderLine,
 } from "@/api/waiterOrders";
 import TableCardSkeleton from "@/components/Loader/TableCardSkeleton";
 import MenuModal from "@/components/Tables/MenuModal";
@@ -135,6 +136,9 @@ export default function TablesScreen() {
   const [actionTable, setActionTable] = useState<ApiTable | null>(null);
   const [isClosingTable, setIsClosingTable] = useState(false);
   const [isDeletingItems, setIsDeletingItems] = useState(false);
+  const [deletingItemIndex, setDeletingItemIndex] = useState<number | null>(
+    null,
+  );
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [kotDetails, setKotDetails] = useState<KotDetailsItem[]>([]);
@@ -273,6 +277,62 @@ export default function TablesScreen() {
         },
       ],
     );
+  };
+
+  const runDeleteItem = async (
+    table: ApiTable,
+    bookingId: number,
+    index: number,
+  ) => {
+    if (!token || deletingItemIndex !== null || isDeletingItems) return;
+
+    const lines: WaiterOrderLine[] = kotDetails.map((line, i) => ({
+      rowId: line.rowId,
+      productId: line.productId,
+      variationId: line.variationId,
+      name: line.name,
+      desiredQty: i === index ? 0 : line.qty,
+    }));
+
+    setDeletingItemIndex(index);
+    try {
+      await syncWaiterOrderItems(
+        token,
+        bookingId,
+        waiterOrderIdFor(bookingId),
+        lines,
+      );
+      await loadKotDetails(table);
+      await loadTables(false);
+    } catch (e) {
+      Alert.alert(
+        "Could not remove item",
+        e instanceof Error ? e.message : "Failed to remove the item.",
+      );
+    } finally {
+      setDeletingItemIndex(null);
+    }
+  };
+
+  const handleDeleteItem = (index: number) => {
+    if (!actionTable || !token) return;
+    if (deletingItemIndex !== null || isDeletingItems) return;
+
+    const bookingId = actionTable.booking?.id;
+    if (bookingId === null || bookingId === undefined) return;
+
+    const target = kotDetails[index];
+    if (!target) return;
+
+    const table = actionTable;
+    Alert.alert("Remove item", `Remove ${target.name} from ${table.name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => runDeleteItem(table, bookingId, index),
+      },
+    ]);
   };
 
   const handleOpenEditItems = async () => {
@@ -734,9 +794,11 @@ export default function TablesScreen() {
         onRetryKotDetails={() => actionTable && loadKotDetails(actionTable)}
         isClosingTable={isClosingTable}
         isDeletingItems={isDeletingItems}
+        deletingItemIndex={deletingItemIndex}
         onEditItems={handleOpenEditItems}
         onCloseTable={handleCloseTable}
         onDeleteItems={handleDeleteItems}
+        onDeleteItem={handleDeleteItem}
       />
     </SafeAreaView>
   );

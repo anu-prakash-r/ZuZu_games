@@ -24,9 +24,11 @@ interface TableActionsModalProps {
   onRetryKotDetails: () => void;
   isClosingTable: boolean;
   isDeletingItems: boolean;
+  deletingItemIndex: number | null;
   onEditItems: () => void;
   onCloseTable: () => void;
   onDeleteItems: () => void;
+  onDeleteItem: (index: number) => void;
 }
 
 export default function TableActionsModal({
@@ -39,9 +41,11 @@ export default function TableActionsModal({
   onRetryKotDetails,
   isClosingTable,
   isDeletingItems,
+  deletingItemIndex,
   onEditItems,
   onCloseTable,
   onDeleteItems,
+  onDeleteItem,
 }: TableActionsModalProps) {
   const kotDetailsTotal = kotDetails.reduce(
     (sum, item) => sum + (item.totalPrice ?? (item.unitPrice ?? 0) * item.qty),
@@ -139,7 +143,7 @@ export default function TableActionsModal({
                                   : ""
                               }`}
                             >
-                              <View className="flex-1 pr-3">
+                              <View className="flex-1 pr-2">
                                 <Text
                                   className="text-slate-900 text-xs font-bold"
                                   numberOfLines={1}
@@ -160,6 +164,34 @@ export default function TableActionsModal({
                                 <Text className="text-[#35116B] font-black text-xs min-w-[45px] text-right">
                                   ₹{lineTotal.toFixed(2)}
                                 </Text>
+                                <TouchableOpacity
+                                  onPress={() => onDeleteItem(index)}
+                                  disabled={
+                                    isDeletingItems || deletingItemIndex !== null
+                                  }
+                                  hitSlop={{
+                                    top: 10,
+                                    bottom: 10,
+                                    left: 10,
+                                    right: 10,
+                                  }}
+                                  className="w-7 h-7 rounded-full bg-red-50 items-center justify-center disabled:opacity-50"
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Remove ${item.name}`}
+                                >
+                                  {deletingItemIndex === index ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#DC2626"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="trash-outline"
+                                      size={14}
+                                      color="#DC2626"
+                                    />
+                                  )}
+                                </TouchableOpacity>
                               </View>
                             </View>
                           );
