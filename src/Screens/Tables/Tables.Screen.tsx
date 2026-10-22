@@ -4,6 +4,7 @@ import {
   storeKotOrder,
   type KotDetailsItem,
   type KotStorePayload,
+  type KotStoreResponse,
 } from "@/api/kot";
 import { fetchProducts, productPrice, type Product } from "@/api/products";
 import { fetchTables, type ApiTable } from "@/api/tables";
@@ -537,8 +538,10 @@ export default function TablesScreen() {
       await loadTables(false);
       await printSessionBill(tableName, booking.id, charges, response);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to close the table.";
+      Alert.alert(
+        "Could not close the table",
+        e instanceof Error ? e.message : "Failed to close the table.",
+      );
     } finally {
       setIsClosingTable(false);
     }
@@ -553,6 +556,10 @@ export default function TablesScreen() {
     const config = await loadPrinterConfig();
     const host = config.billingIp;
     if (!isValidIPv4(host)) {
+      Alert.alert(
+        "Bill saved, not printed",
+        "No billing printer IP is set. Add it in Settings → Printers to print the bill.",
+      );
       return;
     }
 
@@ -581,8 +588,11 @@ export default function TablesScreen() {
         config.port,
       );
     } catch (e) {
-      const printMsg =
-        e instanceof Error ? e.message : "Failed to print the bill.";
+      Alert.alert(
+        "Bill saved, printing failed",
+        (e instanceof Error ? e.message : "Failed to print the bill.") +
+          "\n\nThe table was closed successfully.",
+      );
     }
   };
 
@@ -616,8 +626,57 @@ export default function TablesScreen() {
     );
   };
 
+  /**
+   * Sends the server-built KOT to the kitchen printer.
+   * Never throws — every outcome is surfaced to the waiter with an Alert,
+   * so a failed print can no longer happen silently.
+   */
+  const printKitchenCopy = async (response: KotStoreResponse) => {
+    if (!response.kot) {
+      Alert.alert(
+        "KOT saved, not printed",
+        "The order was saved, but the server did not return any KOT data to print.",
+      );
+      return;
+    }
+
+    const config = await loadPrinterConfig();
+    const useLocalIp = isValidIPv4(config.kotIp);
+    const host = useLocalIp ? config.kotIp.trim() : response.kot_printer;
+    const port = useLocalIp
+      ? config.port
+      : (response.kot_printer_port ?? config.port);
+
+    if (!host) {
+      Alert.alert(
+        "No KOT printer found",
+        "The order was saved, but no printer address is available. Set the KOT printer IP in Settings → Printers, then reprint from the room's actions.",
+      );
+      return;
+    }
+
+    try {
+      await printServerKot(host, response.kot, port);
+    } catch (e) {
+      Alert.alert(
+        "KOT saved, printing failed",
+        (e instanceof Error ? e.message : "Failed to print the KOT.") +
+          "\n\nThe order is saved. You can reprint it from the room's actions.",
+      );
+    }
+  };
+
   const handleConfirmBooking = async () => {
-    if (!selectedTable || !token || isSubmittingKot) return;
+    if (isSubmittingKot) return;
+    if (!selectedTable || !token) {
+      Alert.alert(
+        "Cannot print KOT",
+        !token
+          ? "Your session has expired. Please sign in again."
+          : "No room is selected.",
+      );
+      return;
+    }
 
     const total = calculateTotal();
     const payload = buildKotPayload(
@@ -646,31 +705,17 @@ export default function TablesScreen() {
       notes.reset();
       setIsModalOpen(false);
 
+      // Print first — a slow totals refresh must never delay the kitchen.
+      await printKitchenCopy(response);
+
       if (selectedTable.booking?.id != null) {
         await loadTableTotals([selectedTable]).catch(() => {});
       }
-
-      if (response.kot) {
-        const config = await loadPrinterConfig();
-        const useLocalIp = isValidIPv4(config.kotIp);
-        const host = useLocalIp ? config.kotIp.trim() : response.kot_printer;
-        const port = useLocalIp
-          ? config.port
-          : (response.kot_printer_port ?? config.port);
-
-        if (host) {
-          try {
-            await printServerKot(host, response.kot!, port);
-          } catch (e) {
-            const printMsg =
-              e instanceof Error ? e.message : "Failed to print the KOT.";
-          }
-        } else if (response.print_kot) {
-        }
-      }
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Failed to send the KOT.";
+      Alert.alert(
+        "Could not send KOT",
+        e instanceof Error ? e.message : "Failed to send the KOT.",
+      );
     } finally {
       setIsSubmittingKot(false);
     }
