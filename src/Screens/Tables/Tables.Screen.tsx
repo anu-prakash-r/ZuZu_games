@@ -66,7 +66,66 @@ export default function TablesScreen() {
   const [localBookings, setLocalBookings] = useState<
     Record<number, LocalBooking>
   >({});
+  const [tableTotals, setTableTotals] = useState<Record<number, number>>({});
+  const [waiterOrderIds, setWaiterOrderIds] = useState<Record<number, number>>(
+    {},
+  );
   const [, setTick] = useState(0);
+
+  const rememberWaiterOrderId = useCallback(
+    (
+      bookingId: number | null | undefined,
+      waiterOrderId: number | null | undefined,
+    ) => {
+      if (bookingId === null || bookingId === undefined || !waiterOrderId)
+        return;
+      setWaiterOrderIds((prev) =>
+        prev[bookingId] === waiterOrderId
+          ? prev
+          : { ...prev, [bookingId]: waiterOrderId },
+      );
+    },
+    [],
+  );
+
+  const loadTableTotals = useCallback(
+    async (tables: ApiTable[]) => {
+      if (!token) return;
+      const booked = tables.filter((t) => t.booking?.id != null);
+      if (booked.length === 0) {
+        setTableTotals({});
+        return;
+      }
+
+      const entries = await Promise.all(
+        booked.map(async (t) => {
+          try {
+            const bundle = await fetchKotDetailsBundle(
+              token,
+              t.id,
+              t.booking!.id,
+            );
+            rememberWaiterOrderId(t.booking!.id, bundle.waiterOrderId);
+            const total = bundle.items.reduce(
+              (sum, it) =>
+                sum + (it.totalPrice ?? (it.unitPrice ?? 0) * it.qty),
+              0,
+            );
+            return [t.id, total] as const;
+          } catch {
+            return [t.id, 0] as const;
+          }
+        }),
+      );
+
+      setTableTotals((prev) => {
+        const next: Record<number, number> = {};
+        for (const [id, total] of entries) next[id] = total;
+        return next;
+      });
+    },
+    [token, rememberWaiterOrderId],
+  );
 
   const loadTables = useCallback(
     async (showSpinner = true) => {
@@ -76,6 +135,7 @@ export default function TablesScreen() {
       try {
         const data = await fetchTables(token);
         setApiTables(data);
+        loadTableTotals(data);
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "Failed to load tables.";
@@ -85,7 +145,7 @@ export default function TablesScreen() {
         setRefreshing(false);
       }
     },
-    [token],
+    [token, loadTableTotals],
   );
 
   useEffect(() => {
@@ -144,9 +204,6 @@ export default function TablesScreen() {
   const [kotDetails, setKotDetails] = useState<KotDetailsItem[]>([]);
   const [isLoadingKotDetails, setIsLoadingKotDetails] = useState(false);
   const [kotDetailsError, setKotDetailsError] = useState<string | null>(null);
-  const [waiterOrderIds, setWaiterOrderIds] = useState<Record<number, number>>(
-    {},
-  );
 
   const notes = useItemNotes();
 
@@ -168,22 +225,6 @@ export default function TablesScreen() {
     setIsNoteModalOpen(false);
     setIsModalOpen(true);
   };
-
-  const rememberWaiterOrderId = useCallback(
-    (
-      bookingId: number | null | undefined,
-      waiterOrderId: number | null | undefined,
-    ) => {
-      if (bookingId === null || bookingId === undefined || !waiterOrderId)
-        return;
-      setWaiterOrderIds((prev) =>
-        prev[bookingId] === waiterOrderId
-          ? prev
-          : { ...prev, [bookingId]: waiterOrderId },
-      );
-    },
-    [],
-  );
 
   const waiterOrderIdFor = (
     bookingId: number | null | undefined,
@@ -726,6 +767,7 @@ export default function TablesScreen() {
                 table={table}
                 liveTime={getElapsedTime(getTableBookedAt(table))}
                 override={localBookings[table.id]}
+                price={tableTotals[table.id] ?? null}
                 onPress={() => handleTablePress(table)}
                 onActionsPress={() => openActionModal(table)}
               />
