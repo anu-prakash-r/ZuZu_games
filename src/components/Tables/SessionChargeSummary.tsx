@@ -28,7 +28,7 @@ export default function SessionChargeSummary({
     (sum, item) => sum + (item.totalPrice ?? (item.unitPrice ?? 0) * item.qty),
     0,
   );
-  const payable = charges.roomCharge + charges.extraPersonCharge + foodTotal;
+  const payable = charges.roomCharge + foodTotal;
 
   return (
     <View className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
@@ -36,13 +36,24 @@ export default function SessionChargeSummary({
         Session Charges
       </Text>
 
-      <View className="flex-row items-center justify-between mt-2">
-        <Text className="text-slate-600 text-xs font-semibold">
-          Room · {formatElapsed(charges.elapsedMinutes)} @ ₹{HOURLY_RATE}/hr
-        </Text>
-        <Text className="text-slate-900 text-xs font-bold">
-          ₹{charges.roomCharge}
-        </Text>
+      <View className="mt-2">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-slate-600 text-xs font-semibold">
+            Room · {formatElapsed(charges.elapsedMinutes)} @ ₹{HOURLY_RATE}/hr
+          </Text>
+          <Text className="text-slate-900 text-xs font-bold">
+            ₹{charges.roomCharge}
+          </Text>
+        </View>
+
+        <View className="flex-row items-center justify-between mt-1">
+          <Text className="text-slate-600 text-xs font-semibold">
+            Existing persons charge
+          </Text>
+          <Text className="text-slate-900 text-xs font-bold">
+            ₹{charges.existingPersonCharge}
+          </Text>
+        </View>
       </View>
 
       <View className="flex-row items-center justify-between mt-1.5">

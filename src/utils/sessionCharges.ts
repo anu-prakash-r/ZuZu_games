@@ -1,4 +1,7 @@
 export const HOURLY_RATE = 100;
+export const PER_HEAD_RATE_SHORT = 50;
+export const PER_HEAD_RATE_LONG = 100;
+export const FOOD_RATE_PER_HEAD = 0;
 export const EXTRA_PERSON_RATE = 100;
 const MINUTES_PER_HOUR = 60;
 
@@ -8,6 +11,8 @@ export interface SessionCharges {
   roomCharge: number;
   extraPersons: number;
   extraPersonCharge: number;
+  existingPersonCharge: number;
+  foodCharge: number;
 }
 
 function parseBookingDate(value: string | null | undefined): number | null {
@@ -41,15 +46,22 @@ export function sessionCharges(
     startMs == null ? 0 : Math.max(0, Math.round((endMs - startMs) / 60000));
 
   const hoursBilled = elapsedMinutes / MINUTES_PER_HOUR;
-  const roomCharge = Math.round(hoursBilled * HOURLY_RATE);
 
-  const booked = booking.head_count ?? 0;
-  const extra =
+  const existingHeads = booking.head_count ?? 0;
+  const extraPersons =
     booking.extra_head_count ??
-    Math.max(0, (booking.total_head_count ?? booked) - booked);
+    Math.max(0, (booking.total_head_count ?? existingHeads) - existingHeads);
 
-  const extraPersons = Math.max(0, extra);
-  const extraPersonCharge = extraPersons * EXTRA_PERSON_RATE;
+  const perHeadRate =
+    elapsedMinutes <= 30 ? PER_HEAD_RATE_SHORT : PER_HEAD_RATE_LONG;
+
+  const existingPersonCharge = existingHeads * perHeadRate;
+  const extraPersonCharge = extraPersons * perHeadRate;
+
+  const totalHeads = existingHeads + extraPersons;
+  const foodCharge = totalHeads * FOOD_RATE_PER_HEAD;
+
+  const roomCharge = existingPersonCharge + extraPersonCharge;
 
   return {
     elapsedMinutes,
@@ -57,11 +69,13 @@ export function sessionCharges(
     roomCharge,
     extraPersons,
     extraPersonCharge,
+    existingPersonCharge,
+    foodCharge,
   };
 }
 
 export function sessionTotal(c: SessionCharges): number {
-  return c.roomCharge + c.extraPersonCharge;
+  return c.roomCharge + c.foodCharge;
 }
 
 export function formatElapsed(minutes: number): string {
