@@ -44,6 +44,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Modal,
   RefreshControl,
   ScrollView,
   Text,
@@ -824,52 +825,76 @@ export default function TablesScreen() {
         )}
       </ScrollView>
 
-      <MenuModal
-        visible={isModalOpen}
-        onClose={closeMenuModal}
-        tableName={selectedTable?.name}
-        isOccupied={selectedIsOccupied}
-        products={products}
-        productsLoading={productsLoading}
-        productsError={productsError}
-        onRetryProducts={() => {
-          refetchProducts();
-          refetchCategories();
+      <Modal
+        visible={isModalOpen || isNoteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (isNoteModalOpen) {
+            setIsNoteModalOpen(false);
+            setIsModalOpen(true);
+          } else {
+            closeMenuModal();
+          }
         }}
-        categories={categories}
-        quantities={quantities}
-        onQuantityChange={changeQty}
-        search={menuSearch}
-        onSearchChange={setMenuSearch}
-        selectedCategoryId={selectedCategoryId}
-        onCategoryChange={setSelectedCategoryId}
-        totalItems={totalItems}
-        totalPrice={calculateTotal()}
-        onPrintKot={() => setIsNoteModalOpen(true)}
-        isSubmittingKot={isSubmittingKot || isSavingEdit}
-        isEditMode={isEditMode}
-        onSaveEdit={handleSaveEditItems}
-      />
-
-      <NoteModal
-        visible={isNoteModalOpen}
-        onClose={() => setIsNoteModalOpen(false)}
-        tableName={selectedTable?.name}
-        selectedProducts={selectedProducts}
-        quantities={quantities}
-        totalItems={totalItems}
-        totalPrice={calculateTotal()}
-        hasAnyNote={hasAnyNote}
-        itemNoteText={notes.itemNoteText}
-        expandedNotePid={notes.expandedNotePid}
-        onToggleExpand={notes.setExpandedNotePid}
-        onNoteChange={notes.setNoteText}
-        onToggleChip={notes.toggleChip}
-        isChipActive={notes.isChipActive}
-        composeNote={notes.composeNote}
-        onConfirm={handleConfirmBooking}
-        isSubmittingKot={isSubmittingKot}
-      />
+      >
+        {isNoteModalOpen ? (
+          <NoteModal
+            embedded
+            visible
+            onClose={() => {
+              setIsNoteModalOpen(false);
+              setIsModalOpen(true);
+            }}
+            tableName={selectedTable?.name}
+            selectedProducts={selectedProducts}
+            quantities={quantities}
+            totalItems={totalItems}
+            totalPrice={calculateTotal()}
+            hasAnyNote={hasAnyNote}
+            itemNoteText={notes.itemNoteText}
+            expandedNotePid={notes.expandedNotePid}
+            onToggleExpand={notes.setExpandedNotePid}
+            onNoteChange={notes.setNoteText}
+            onToggleChip={notes.toggleChip}
+            isChipActive={notes.isChipActive}
+            composeNote={notes.composeNote}
+            onConfirm={handleConfirmBooking}
+            isSubmittingKot={isSubmittingKot}
+          />
+        ) : (
+          <MenuModal
+            embedded
+            visible
+            onClose={closeMenuModal}
+            tableName={selectedTable?.name}
+            isOccupied={selectedIsOccupied}
+            products={products}
+            productsLoading={productsLoading}
+            productsError={productsError}
+            onRetryProducts={() => {
+              refetchProducts();
+              refetchCategories();
+            }}
+            categories={categories}
+            quantities={quantities}
+            onQuantityChange={changeQty}
+            search={menuSearch}
+            onSearchChange={setMenuSearch}
+            selectedCategoryId={selectedCategoryId}
+            onCategoryChange={setSelectedCategoryId}
+            totalItems={totalItems}
+            totalPrice={calculateTotal()}
+            onPrintKot={() => {
+              setIsModalOpen(false);
+              setIsNoteModalOpen(true);
+            }}
+            isSubmittingKot={isSubmittingKot || isSavingEdit}
+            isEditMode={isEditMode}
+            onSaveEdit={handleSaveEditItems}
+          />
+        )}
+      </Modal>
 
       <TableActionsModal
         visible={isActionModalOpen}

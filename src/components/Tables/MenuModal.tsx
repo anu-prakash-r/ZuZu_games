@@ -36,6 +36,7 @@ interface MenuModalProps {
   isSubmittingKot: boolean;
   isEditMode?: boolean;
   onSaveEdit?: () => void;
+  embedded?: boolean;
 }
 
 export default function MenuModal({
@@ -60,6 +61,7 @@ export default function MenuModal({
   isSubmittingKot,
   isEditMode = false,
   onSaveEdit,
+  embedded = false,
 }: MenuModalProps) {
   const filteredProducts = products.filter(
     (p) =>
@@ -81,14 +83,8 @@ export default function MenuModal({
       Number((quantities[a.product_id] ?? 0) > 0),
   );
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end bg-black/60">
+  const content = (
+    <View className="flex-1 justify-end bg-black/60">
         <View className="bg-white rounded-t-[32px] p-6 border-t border-slate-100 h-[85%] justify-between">
           <View className="flex-row items-center justify-between mb-2 pb-1">
             <View>
@@ -328,6 +324,18 @@ export default function MenuModal({
           )}
         </View>
       </View>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      {content}
     </Modal>
   );
 }
