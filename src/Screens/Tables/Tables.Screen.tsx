@@ -130,7 +130,11 @@ export default function TablesScreen() {
 
   const loadTables = useCallback(
     async (showSpinner = true) => {
-      if (!token) return;
+      if (!token) {
+        setIsLoadingTables(false);
+        setRefreshing(false);
+        return;
+      }
       if (showSpinner) setIsLoadingTables(true);
       setTablesError(null);
       try {
@@ -754,12 +758,13 @@ export default function TablesScreen() {
       <ScrollView
         className="flex-1 px-5 pt-5"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor="#35116B"
+            colors={["#35116B"]}
           />
         }
       >

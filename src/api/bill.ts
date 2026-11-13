@@ -67,7 +67,14 @@ export async function closeTable(
   bookingId: number,
   payload?: CloseBillPayload,
 ): Promise<CloseBillResponse> {
-  return closeTableBill(token, bookingId, payload);
+  try {
+    return await closeTableBill(token, bookingId, payload);
+  } catch (e) {
+    if (isAlreadyBilled(e)) {
+      return {};
+    }
+    throw e;
+  }
 }
 
 function isAlreadyBilled(e: unknown): boolean {

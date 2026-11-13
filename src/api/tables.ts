@@ -1,4 +1,5 @@
 import { authFetch } from "./auth";
+import { API_TIMEOUT_MS } from "./config";
 
 export interface TableBooking {
   id: number;
@@ -36,7 +37,23 @@ interface TablesApiRaw {
 }
 
 export async function fetchTables(token: string): Promise<ApiTable[]> {
-  const res = await authFetch("/tables", token);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await authFetch("/tables", token, { signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Loading rooms timed out. Check your connection and retry.");
+    }
+    throw new Error(
+      "Could not reach the server. Check your internet connection.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+
   let data: TablesApiRaw | null = null;
   try {
     data = (await res.json()) as TablesApiRaw;
