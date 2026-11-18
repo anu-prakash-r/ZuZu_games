@@ -4,9 +4,8 @@ import { Text, View } from "react-native";
 import type { KotDetailsItem } from "@/api/kot";
 import type { TableBooking } from "@/api/tables";
 import {
-  sessionCharges,
   formatElapsed,
-  HOURLY_RATE,
+  sessionChargesForBooking,
 } from "@/utils/sessionCharges";
 
 export default function SessionChargeSummary({
@@ -23,46 +22,49 @@ export default function SessionChargeSummary({
     return () => clearInterval(id);
   }, []);
 
-  const charges = sessionCharges(booking);
+  const charges = sessionChargesForBooking(booking);
   const foodTotal = items.reduce(
     (sum, item) => sum + (item.totalPrice ?? (item.unitPrice ?? 0) * item.qty),
     0,
   );
   const payable = charges.roomCharge + foodTotal;
+  const sameExtraTime =
+    charges.extraPersonMinutes.length > 0 &&
+    charges.extraPersonMinutes.every(
+      (minutes) => minutes === charges.extraPersonMinutes[0],
+    );
 
   return (
     <View className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
       <Text className="text-slate-500 text-[11px] font-black uppercase tracking-wide">
-        Session Charges
+        {`Session Charges · ${formatElapsed(charges.elapsedMinutes)} · ₹${charges.perHeadRate}/person`}
       </Text>
 
       <View className="mt-2">
         <View className="flex-row items-center justify-between">
           <Text className="text-slate-600 text-xs font-semibold">
-            Room · {formatElapsed(charges.elapsedMinutes)} @ ₹{HOURLY_RATE}/hr
-          </Text>
-          <Text className="text-slate-900 text-xs font-bold">
-            ₹{charges.roomCharge}
-          </Text>
-        </View>
-
-        <View className="flex-row items-center justify-between mt-1">
-          <Text className="text-slate-600 text-xs font-semibold">
-            Existing persons charge
+            First {charges.existingPersons} person
+            {charges.existingPersons === 1 ? "" : "s"}
           </Text>
           <Text className="text-slate-900 text-xs font-bold">
             ₹{charges.existingPersonCharge}
           </Text>
         </View>
-      </View>
 
-      <View className="flex-row items-center justify-between mt-1.5">
-        <Text className="text-slate-600 text-xs font-semibold">
-          Extra persons · {charges.extraPersons}
-        </Text>
-        <Text className="text-slate-900 text-xs font-bold">
-          ₹{charges.extraPersonCharge}
-        </Text>
+        {charges.extraPersons > 0 ? (
+          <View className="flex-row items-center justify-between mt-1">
+            <Text className="text-slate-600 text-xs font-semibold">
+              {`Extra persons · ${charges.extraPersons}${
+                sameExtraTime
+                  ? ` · ${formatElapsed(charges.extraPersonMinutes[0])}`
+                  : ""
+              }`}
+            </Text>
+            <Text className="text-slate-900 text-xs font-bold">
+              ₹{charges.extraPersonCharge}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <View className="flex-row items-center justify-between mt-1.5">

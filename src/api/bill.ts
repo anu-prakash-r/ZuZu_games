@@ -9,7 +9,9 @@ export interface CloseBillPayload {
 
 interface BillApiRaw {
   status?: boolean | string;
+  success?: boolean | string;
   message?: string;
+  error?: string;
   data?: unknown;
 }
 

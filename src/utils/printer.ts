@@ -1,7 +1,28 @@
 import * as SecureStore from "expo-secure-store";
-import TcpSocket from "react-native-tcp-socket";
 
-import { HOURLY_RATE } from "./sessionCharges";
+import { formatElapsed } from "./sessionCharges";
+
+type TcpSocketModule = {
+  createConnection: (
+    options: { host: string; port: number },
+    callback: () => void,
+  ) => any;
+};
+
+let tcpSocketModule: TcpSocketModule | null = null;
+
+async function loadTcpSocket(): Promise<TcpSocketModule> {
+  if (tcpSocketModule) return tcpSocketModule;
+  try {
+    const module = await import("react-native-tcp-socket");
+    tcpSocketModule = module.default as TcpSocketModule;
+    return tcpSocketModule;
+  } catch {
+    throw new Error(
+      "Printing is not supported in Expo Go. Use a development build to print receipts and KOT tickets.",
+    );
+  }
+}
 
 const STORAGE_KEY = "zuzu_printers_config";
 
@@ -73,7 +94,10 @@ const COLS = 32;
 export function toAscii(text: string): string {
   return text
     .replace(/₹/g, "Rs ")
-    .replace(/[^\x20-\x7E\n]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/ {2,}/g, " ")
+    .trim()
     .slice(0, 500);
 }
 
@@ -95,11 +119,48 @@ function centered(text: string): string {
   return " ".repeat(pad) + clean + LF;
 }
 
+function wrapText(text: string, width: number): string[] {
+  const clean = toAscii(text);
+  if (!clean) return [];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of clean.split(" ")) {
+    if (!word) continue;
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= width) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word.length <= width ? word : word.slice(0, width);
+    if (current.length >= width) {
+      lines.push(current);
+      current = "";
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function noteLines(text: string): string {
+  return wrapText(text, COLS)
+    .map((line) => line + LF)
+    .join("");
+}
+
 function row(left: string, right: string): string {
-  const r = toAscii(right).slice(0, COLS);
+  const r = toAscii(right).slice(0, COLS - 2);
   const maxLeft = Math.max(0, COLS - r.length - 1);
-  const l = toAscii(left).slice(0, maxLeft);
-  return l + " ".repeat(COLS - l.length - r.length) + r + LF;
+  const lines =
+    maxLeft >= 6 ? wrapText(left, maxLeft) : [toAscii(left).slice(0, maxLeft)];
+  if (lines.length === 0) {
+    return " ".repeat(COLS - r.length) + r + LF;
+  }
+  let out = lines[0] + " ".repeat(COLS - lines[0].length - r.length) + r + LF;
+  for (let i = 1; i < lines.length; i++) {
+    out += "  " + lines[i].slice(0, COLS - 2) + LF;
+  }
+  return out;
 }
 
 export interface ReceiptItem {
@@ -123,20 +184,25 @@ export interface SendOptions {
   timeoutMs?: number;
 }
 
-export function sendToPrinter({
+export async function sendToPrinter({
   host,
   port = 9100,
   data,
   timeoutMs = 6000,
 }: SendOptions): Promise<void> {
+  const TcpSocket = await loadTcpSocket();
+
   return new Promise((resolve, reject) => {
     let settled = false;
+    let wrote = false;
     let client: any = null;
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (err?: unknown) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (closeTimer) clearTimeout(closeTimer);
       try {
         client?.destroy();
       } catch {}
@@ -158,14 +224,19 @@ export function sendToPrinter({
     try {
       client = TcpSocket.createConnection({ host, port }, () => {
         try {
-          client.write(data);
-
-          setTimeout(() => finish(), 800);
+          client.write(data, "utf8", (writeErr?: Error) => {
+            if (writeErr) {
+              finish(writeErr);
+              return;
+            }
+            wrote = true;
+            closeTimer = setTimeout(() => finish(), 250);
+          });
         } catch (e) {
           finish(e);
         }
       });
-      client.on("error", (e: unknown) => finish(e));
+      client.on("error", (e: unknown) => finish(wrote ? undefined : e));
       client.on("timeout", () =>
         finish(new Error(`Connection to ${host}:${port} timed out.`)),
       );
@@ -261,7 +332,7 @@ export async function printServerKot(
   for (const item of kot.items) {
     out += row(`${item.qty}x ${item.name}`, `Rs ${item.total_price}`);
     if (item.note) {
-      out += `Note: ${toAscii(item.note)}` + LF;
+      out += noteLines(`Note: ${item.note}`);
     }
   }
   out += hr() + cut();
@@ -294,7 +365,7 @@ export async function printKotTicket(
     out += row(`${item.qty}x ${item.name}`, "");
   }
   if (ticket.note) {
-    out += hr() + `Note: ${toAscii(ticket.note)}` + LF;
+    out += hr() + noteLines(`Note: ${ticket.note}`);
   }
   out += hr() + cut();
   await sendToPrinter({ host, port, data: out });
@@ -306,11 +377,12 @@ export interface BillTicket {
   items: ReceiptItem[];
   elapsed?: string;
   roomCharge?: number;
+  existingPersons?: number;
+  existingPersonCharge?: number;
   extraPersons?: number;
+  extraPersonMinutes?: number[];
   extraPersonCharge?: number;
-  hourlyRate?: number;
-  timeChargePerPerson?: number;
-  persons?: number;
+  perHeadRate?: number;
   invoiceNo?: string;
 }
 
@@ -320,9 +392,10 @@ export async function printBill(
   port = 9100,
 ): Promise<void> {
   const foodTotal = ticket.items.reduce((s, i) => s + i.qty * i.price, 0);
-  const roomCharge = ticket.roomCharge ?? 0;
+  const sessionCharge = ticket.roomCharge ?? 0;
+  const baseCharge = ticket.existingPersonCharge ?? sessionCharge;
   const extraPersonCharge = ticket.extraPersonCharge ?? 0;
-  const total = foodTotal + roomCharge + extraPersonCharge;
+  const total = foodTotal + sessionCharge;
 
   let out =
     init() +
@@ -350,35 +423,32 @@ export async function printBill(
     out += row(`${item.qty}x ${item.name}`, `Rs ${item.qty * item.price}`);
   }
 
-  if (roomCharge > 0 || ticket.elapsed) {
-    const persons = ticket.persons ?? 0;
-    const perPerson = ticket.timeChargePerPerson;
+  if (sessionCharge > 0 || ticket.elapsed) {
+    const existingPersons = ticket.existingPersons ?? 0;
+    const rate = ticket.perHeadRate ?? 0;
+    const baseLabel = [
+      `First ${existingPersons} person${existingPersons === 1 ? "" : "s"}`,
+      ticket.elapsed,
+      rate > 0 ? `@ Rs ${rate}/person` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     out +=
       hr() +
       boldOn() +
       "SESSION" +
       LF +
-      boldOff();
-
-    if (perPerson != null && persons > 0) {
-      out +=
-        row(`Time ${ticket.elapsed ?? ""}`, "") +
-        row(
-          `Per person (first 30m Rs 50, then Rs 50/30m)`,
-          `Rs ${perPerson}`,
-        ) +
-        row(`Persons x${persons}`, "") +
-        row(`Time charge`, `Rs ${roomCharge}`);
-    } else {
-      out += row(
-        `Room ${ticket.elapsed ?? ""} @ Rs ${ticket.hourlyRate ?? HOURLY_RATE}/hr`,
-        `Rs ${roomCharge}`,
-      );
-    }
+      boldOff() +
+      row(baseLabel, `Rs ${baseCharge}`);
 
     if ((ticket.extraPersons ?? 0) > 0 && extraPersonCharge > 0) {
+      const minutes = ticket.extraPersonMinutes ?? [];
+      const sameMinutes =
+        minutes.length > 0 && minutes.every((m) => m === minutes[0]);
+      const timeLabel = sameMinutes ? ` (${formatElapsed(minutes[0])})` : "";
       out += row(
-        `Extra persons x${ticket.extraPersons}`,
+        `Extra persons x${ticket.extraPersons}${timeLabel}`,
         `Rs ${extraPersonCharge}`,
       );
     }

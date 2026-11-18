@@ -36,13 +36,13 @@ import {
 } from "@/utils/printer";
 import {
   formatElapsed,
-  HOURLY_RATE,
-  sessionCharges,
+  sessionChargesForBooking,
 } from "@/utils/sessionCharges";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   RefreshControl,
@@ -530,8 +530,8 @@ export default function TablesScreen() {
     setIsClosingTable(true);
     const tableName = actionTable.name;
     try {
-      const response = await closeTable(token, booking.id);
-      const charges = sessionCharges(booking);
+        const response = await closeTable(token, booking.id);
+      const charges = sessionChargesForBooking(booking);
       setLocalBookings((prev) => {
         if (!(actionTable.id in prev)) return prev;
         const copy = { ...prev };
@@ -555,7 +555,7 @@ export default function TablesScreen() {
   const printSessionBill = async (
     tableName: string,
     bookingId: number,
-    charges: ReturnType<typeof sessionCharges>,
+    charges: ReturnType<typeof sessionChargesForBooking>,
     response: Record<string, unknown> | null,
   ) => {
     const config = await loadPrinterConfig();
@@ -585,9 +585,12 @@ export default function TablesScreen() {
           })),
           elapsed: formatElapsed(charges.elapsedMinutes),
           roomCharge: charges.roomCharge,
+          existingPersons: charges.existingPersons,
+          existingPersonCharge: charges.existingPersonCharge,
           extraPersons: charges.extraPersons,
+          extraPersonMinutes: charges.extraPersonMinutes,
           extraPersonCharge: charges.extraPersonCharge,
-          hourlyRate: HOURLY_RATE,
+          perHeadRate: charges.perHeadRate,
           invoiceNo,
         },
         config.port,
@@ -753,6 +756,22 @@ export default function TablesScreen() {
             </Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          onPress={onRefresh}
+          activeOpacity={0.7}
+          disabled={refreshing}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          className="w-10 h-10 rounded-2xl items-center justify-center disabled:opacity-50"
+          accessibilityRole="button"
+          accessibilityLabel="Refresh rooms"
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color="#35116B" />
+          ) : (
+            <Ionicons name="refresh" size={20} color="#35116B" />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
